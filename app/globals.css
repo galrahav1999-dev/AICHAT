@@ -92,6 +92,61 @@ body {
   }
 }
 
+/* --- Globe "white vortex" backdrop: shifting purple/blue, slow + minimal --- */
+.vortex {
+  background: radial-gradient(circle at 50% 42%, #ffffff 0%, #f4f2fb 42%, #e9e7f5 100%);
+}
+.vortex-spin {
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(168, 85, 247, 0.16),
+    rgba(99, 102, 241, 0.1),
+    rgba(59, 130, 246, 0.16),
+    rgba(168, 85, 247, 0.16)
+  );
+  filter: blur(70px);
+  animation: vortexSpin 48s linear infinite;
+}
+.vortex-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.55;
+}
+.vortex-blob--p {
+  width: 52%;
+  height: 52%;
+  left: 8%;
+  top: 12%;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.6), transparent 70%);
+  animation: vortexDrift1 26s ease-in-out infinite;
+}
+.vortex-blob--b {
+  width: 56%;
+  height: 56%;
+  right: 6%;
+  bottom: 8%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.55), transparent 70%);
+  animation: vortexDrift2 32s ease-in-out infinite;
+}
+@keyframes vortexSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes vortexDrift1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(8%, 6%) scale(1.12); }
+}
+@keyframes vortexDrift2 {
+  0%, 100% { transform: translate(0, 0) scale(1.05); }
+  50% { transform: translate(-7%, -5%) scale(0.95); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vortex-spin, .vortex-blob { animation: none; }
+}
+
 /* Mapbox attribution + controls tuned for dark UI (kept subtle) */
 .mapboxgl-ctrl-logo,
 .mapboxgl-ctrl-attrib {

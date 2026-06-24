@@ -39,6 +39,17 @@ interface CockpitState {
   // --- Filters ---
   repFilter: string; // "all" or a rep name
   overlapsOnly: boolean;
+  // Extra filters (used by Map + Table/Board toolbars)
+  territoryFilter: string; // "all" | territory
+  sizeFilter: string; // "all" | SizeBucket
+  statusFilter: string; // "all" | DealStatus
+  stageFilter: string; // "all" | Stage
+
+  // --- Editable table (local only) ---
+  removedIds: string[];
+  extraRows: Company[];
+  customColumns: { id: string; label: string }[];
+  cellValues: Record<string, Record<string, string>>; // colId -> rowId -> value
 
   // --- Cosmetic CRM badge ---
   crm: CrmOption;
@@ -58,10 +69,20 @@ interface CockpitState {
   setRepFilter: (rep: string) => void;
   filterToRep: (rep: string) => void;
   toggleOverlapsOnly: () => void;
+  setFilter: (key: "territory" | "size" | "status" | "stage", value: string) => void;
+  resetFilters: () => void;
   setCrm: (c: CrmOption) => void;
   togglePanel: (open?: boolean) => void;
   toggleSound: (on?: boolean) => void;
   moveStage: (companyId: string, stage: Stage) => void;
+  escapeOut: () => void;
+
+  // editable table
+  addRow: (row: Company) => void;
+  deleteRow: (id: string) => void;
+  addColumn: (label: string) => void;
+  deleteColumn: (id: string) => void;
+  setCell: (colId: string, rowId: string, value: string) => void;
 
   drillToGlobe: () => void;
   drillToCountry: (country: string) => void;
@@ -89,6 +110,15 @@ export const useCockpit = create<CockpitState>((set) => ({
 
   repFilter: "all",
   overlapsOnly: false,
+  territoryFilter: "all",
+  sizeFilter: "all",
+  statusFilter: "all",
+  stageFilter: "all",
+
+  removedIds: [],
+  extraRows: [],
+  customColumns: [],
+  cellValues: {},
 
   crm: "HubSpot",
 
@@ -129,6 +159,56 @@ export const useCockpit = create<CockpitState>((set) => ({
     });
   },
   toggleOverlapsOnly: () => set((s) => ({ overlapsOnly: !s.overlapsOnly })),
+  setFilter: (key, value) =>
+    set(
+      key === "territory"
+        ? { territoryFilter: value }
+        : key === "size"
+        ? { sizeFilter: value }
+        : key === "status"
+        ? { statusFilter: value }
+        : { stageFilter: value }
+    ),
+  resetFilters: () =>
+    set({
+      repFilter: "all",
+      overlapsOnly: false,
+      territoryFilter: "all",
+      sizeFilter: "all",
+      statusFilter: "all",
+      stageFilter: "all",
+    }),
+  // Escape backs out of any view: close panel, then zoom out one level.
+  escapeOut: () =>
+    set((s) => {
+      if (s.panelOpen) return { panelOpen: false };
+      if (s.drill === "company") return { drill: "city", selectedCompanyId: null };
+      if (s.drill === "city") return { drill: "country", selectedCity: null };
+      if (s.drill === "country")
+        return { drill: "globe", selectedCountry: null, selectedCity: null, selectedCompanyId: null };
+      if (s.view !== "globe") return { view: "globe" };
+      return {};
+    }),
+  addRow: (row) => set((s) => ({ extraRows: [...s.extraRows, row] })),
+  deleteRow: (id) =>
+    set((s) => ({
+      removedIds: [...s.removedIds, id],
+      selectedCompanyId: s.selectedCompanyId === id ? null : s.selectedCompanyId,
+    })),
+  addColumn: (label) =>
+    set((s) => ({
+      customColumns: [...s.customColumns, { id: `col_${Date.now().toString(36)}`, label }],
+    })),
+  deleteColumn: (id) =>
+    set((s) => {
+      const next = { ...s.cellValues };
+      delete next[id];
+      return { customColumns: s.customColumns.filter((c) => c.id !== id), cellValues: next };
+    }),
+  setCell: (colId, rowId, value) =>
+    set((s) => ({
+      cellValues: { ...s.cellValues, [colId]: { ...(s.cellValues[colId] ?? {}), [rowId]: value } },
+    })),
   setCrm: (crm) => set({ crm }),
   togglePanel: (open) => set((s) => ({ panelOpen: open ?? !s.panelOpen })),
   toggleSound: (on) => set((s) => ({ soundOn: on ?? !s.soundOn })),

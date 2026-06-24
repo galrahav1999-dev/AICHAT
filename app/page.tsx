@@ -23,6 +23,7 @@ const MapView = dynamic(() => import("@/components/MapView"), {
 
 export default function Page() {
   const view = useCockpit((s) => s.view);
+  const escapeOut = useCockpit((s) => s.escapeOut);
   const [mounted, setMounted] = useState(false);
 
   // Brief "powering up" state to make the first paint feel intentional.
@@ -30,6 +31,21 @@ export default function Page() {
     const t = setTimeout(() => setMounted(true), 650);
     return () => clearTimeout(t);
   }, []);
+
+  // Escape backs out of any view (close panel, then zoom out a level).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) {
+        el.blur();
+        return;
+      }
+      escapeOut();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [escapeOut]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -46,8 +62,8 @@ export default function Page() {
               {view === "list" && <ListBoardView />}
             </div>
 
-            {/* Floating filter/alert overlays — only over the spatial views */}
-            {view !== "list" && (
+            {/* Globe gets the location nav + rep pills + overlap CTA overlays */}
+            {view === "globe" && (
               <>
                 <FilterBar />
                 <OverlapAlert />

@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import {
   REPS,
-  REP_COLORS,
   STAGE_COLORS,
   STAGE_ORDER,
   fmtMoney,
@@ -14,7 +13,8 @@ import {
 } from "@/lib/data";
 import { useCockpit } from "@/lib/store";
 import { useFiltered } from "@/lib/useFiltered";
-import { RepAvatar, StageBadge, OverlapBadge, WarnIcon } from "./ui";
+import { RepAvatar, StageBadge, OverlapBadge } from "./ui";
+import FilterControls from "./FilterControls";
 import type { Company, Stage } from "@/lib/types";
 
 type SortKey = "name" | "city" | "stage" | "ownerRep" | "dealValue" | "lastActivity" | "nextFollowUp";
@@ -26,12 +26,35 @@ export default function ListBoardView() {
   const [query, setQuery] = useState("");
 
   const { visible, overlaps } = useFiltered();
-  const repFilter = useCockpit((s) => s.repFilter);
-  const setRepFilter = useCockpit((s) => s.setRepFilter);
-  const overlapsOnly = useCockpit((s) => s.overlapsOnly);
-  const toggleOverlapsOnly = useCockpit((s) => s.toggleOverlapsOnly);
   const selectedId = useCockpit((s) => s.selectedCompanyId);
   const selectCompany = useCockpit((s) => s.selectCompany);
+  const repFilter = useCockpit((s) => s.repFilter);
+  const addRow = useCockpit((s) => s.addRow);
+  const addColumn = useCockpit((s) => s.addColumn);
+
+  function addAccount() {
+    const today = new Date().toISOString().slice(0, 10);
+    addRow({
+      id: `new_${Date.now().toString(36)}`,
+      name: "New account",
+      lat: 0,
+      lng: 0,
+      city: "—",
+      country: "—",
+      stage: "Prospecting",
+      ownerRep: repFilter !== "all" ? repFilter : REPS[0],
+      dealValue: 0,
+      lastActivity: today,
+      nextFollowUp: null,
+      activityNote: "Added manually",
+      aiFollowUp: "",
+    });
+    setTab("table");
+  }
+  function addCustomColumn() {
+    const label = window.prompt("New column name", "Notes");
+    if (label && label.trim()) addColumn(label.trim());
+  }
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -91,39 +114,20 @@ export default function ListBoardView() {
           />
         </div>
 
-        {/* Rep filter */}
-        <div className="flex items-center gap-1">
-          <RepChip active={repFilter === "all"} onClick={() => setRepFilter("all")} color="#94a3b8">
-            Team
-          </RepChip>
-          {REPS.map((rep) => (
-            <RepChip
-              key={rep}
-              active={repFilter === rep}
-              onClick={() => setRepFilter(rep)}
-              color={REP_COLORS[rep]}
-            >
-              <RepAvatar rep={rep} size={16} />
-              <span className="hidden lg:inline">{rep.split(" ")[0]}</span>
-            </RepChip>
-          ))}
-        </div>
+        <FilterControls />
 
-        <button
-          onClick={toggleOverlapsOnly}
-          className={`chip transition-all ${
-            overlapsOnly ? "bg-amber-400/20 text-amber-300 ring-1 ring-amber-400/40" : "text-slate-400 hover:bg-white/5"
-          }`}
-        >
-          <WarnIcon className="h-3.5 w-3.5" />
-          Overlaps only
-        </button>
-
-        <div className="ml-auto flex items-center gap-4 pr-1 text-xs">
-          <span className="text-slate-500">
-            <span className="font-semibold text-white tabular-nums">{rows.length}</span> accounts
-          </span>
-          <span className="text-slate-500">
+        <div className="ml-auto flex items-center gap-2 pr-1">
+          {tab === "table" && (
+            <>
+              <button onClick={addAccount} className="btn-ghost ring-1 ring-white/5" title="Add a new account row">
+                <PlusIcon className="h-4 w-4" /> Row
+              </button>
+              <button onClick={addCustomColumn} className="btn-ghost ring-1 ring-white/5" title="Add a custom column">
+                <PlusIcon className="h-4 w-4" /> Column
+              </button>
+            </>
+          )}
+          <span className="text-xs text-slate-500">
             <span className="font-semibold text-accent-glow tabular-nums">{fmtMoney(totalValue)}</span> pipeline
           </span>
         </div>
@@ -176,6 +180,12 @@ function Table({
   onSelect: (c: Company) => void;
   isOverlap: (c: Company) => boolean;
 }) {
+  const customColumns = useCockpit((s) => s.customColumns);
+  const cellValues = useCockpit((s) => s.cellValues);
+  const setCell = useCockpit((s) => s.setCell);
+  const deleteColumn = useCockpit((s) => s.deleteColumn);
+  const deleteRow = useCockpit((s) => s.deleteRow);
+
   return (
     <table className="w-full border-collapse text-sm">
       <thead className="sticky top-0 z-10 bg-ink-900/95 backdrop-blur">
@@ -190,12 +200,25 @@ function Table({
             >
               <span className="inline-flex items-center gap-1">
                 {col.label}
-                {sort.key === col.key && (
-                  <span className="text-accent-soft">{sort.dir === 1 ? "↑" : "↓"}</span>
-                )}
+                {sort.key === col.key && <span className="text-accent-soft">{sort.dir === 1 ? "↑" : "↓"}</span>}
               </span>
             </th>
           ))}
+          {customColumns.map((col) => (
+            <th key={col.id} className="group/col select-none px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                {col.label}
+                <button
+                  onClick={() => deleteColumn(col.id)}
+                  className="opacity-0 transition-opacity group-hover/col:opacity-100 hover:text-rose-400"
+                  title="Delete column"
+                >
+                  <XIcon className="h-3 w-3" />
+                </button>
+              </span>
+            </th>
+          ))}
+          <th className="w-8 px-2" />
         </tr>
       </thead>
       <tbody>
@@ -211,6 +234,7 @@ function Table({
             >
               <td className="px-4 py-2.5">
                 <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: repColor(c.ownerRep) }} />
                   <span className="font-medium text-white">{c.name}</span>
                   {isOverlap(c) && <OverlapBadge compact />}
                 </div>
@@ -227,9 +251,7 @@ function Table({
                   {c.ownerRep}
                 </span>
               </td>
-              <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-white">
-                {fmtMoney(c.dealValue)}
-              </td>
+              <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-white">{fmtMoney(c.dealValue)}</td>
               <td className="px-4 py-2.5 text-slate-400">{fmtDate(c.lastActivity)}</td>
               <td className="px-4 py-2.5">
                 {c.nextFollowUp ? (
@@ -239,6 +261,28 @@ function Table({
                 ) : (
                   <span className="text-slate-600">—</span>
                 )}
+              </td>
+              {customColumns.map((col) => (
+                <td key={col.id} className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    value={cellValues[col.id]?.[c.id] ?? ""}
+                    onChange={(e) => setCell(col.id, c.id, e.target.value)}
+                    placeholder="—"
+                    className="w-full min-w-[90px] rounded-md bg-transparent px-2 py-1 text-sm text-slate-200 outline-none ring-1 ring-transparent hover:ring-white/10 focus:bg-ink-800 focus:ring-accent/40 placeholder:text-slate-600"
+                  />
+                </td>
+              ))}
+              <td className="px-2 text-center">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteRow(c.id);
+                  }}
+                  className="opacity-0 transition-opacity group-hover:opacity-100 hover:text-rose-400 text-slate-600"
+                  title="Delete row"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
               </td>
             </tr>
           );
@@ -377,29 +421,25 @@ function Board({
 }
 
 /* ---------------- bits ---------------- */
-function RepChip({
-  active,
-  onClick,
-  color,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  color: string;
-  children: React.ReactNode;
-}) {
+function PlusIcon({ className = "" }: { className?: string }) {
   return (
-    <button
-      onClick={onClick}
-      className={`chip transition-all ${
-        active ? "bg-white/10 text-white ring-1 ring-white/15" : "text-slate-400 hover:bg-white/5"
-      }`}
-    >
-      {typeof children === "string" && (
-        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
-      )}
-      {children}
-    </button>
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden>
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+function XIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden>
+      <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+function TrashIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden>
+      <path d="M4 7h16M9 7V5h6v2m-7 0 .8 12a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9L16 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

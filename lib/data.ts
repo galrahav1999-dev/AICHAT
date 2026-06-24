@@ -104,6 +104,56 @@ export function repsForName(name: string, list: Company[] = companies): string[]
 const OPEN_STAGES: Stage[] = ["Prospecting", "Qualified", "Demo", "Proposal", "Negotiation"];
 export const isOpen = (c: Company) => OPEN_STAGES.includes(c.stage);
 
+// --- Territories (regions) ---------------------------------------------------
+export const COUNTRY_TERRITORY: Record<string, string> = {
+  "United States": "Americas",
+  Canada: "Americas",
+  Brazil: "Americas",
+  "United Kingdom": "EMEA",
+  Germany: "EMEA",
+  France: "EMEA",
+  Israel: "EMEA",
+  India: "APAC",
+  Singapore: "APAC",
+  Japan: "APAC",
+  Australia: "APAC",
+};
+export const territoryOf = (country: string) => COUNTRY_TERRITORY[country] ?? "Other";
+export const TERRITORIES = ["Americas", "EMEA", "APAC"];
+
+// --- Deal-size buckets -------------------------------------------------------
+export type SizeBucket = "SMB" | "Mid-Market" | "Enterprise";
+export const SIZE_BUCKETS: SizeBucket[] = ["SMB", "Mid-Market", "Enterprise"];
+export function sizeOf(value: number): SizeBucket {
+  if (value >= 250_000) return "Enterprise";
+  if (value >= 80_000) return "Mid-Market";
+  return "SMB";
+}
+
+// --- Status (open / won / lost) ---------------------------------------------
+export type DealStatus = "Open" | "Won" | "Lost";
+export const STATUSES: DealStatus[] = ["Open", "Won", "Lost"];
+export function statusOf(c: Company): DealStatus {
+  if (c.stage === "Closed Won") return "Won";
+  if (c.stage === "Closed Lost") return "Lost";
+  return "Open";
+}
+
+// Reconcile world-atlas polygon names with our dataset's country names.
+export const POLY_NAME_TO_COUNTRY: Record<string, string> = {
+  "United States of America": "United States",
+  "United Kingdom": "United Kingdom",
+  Germany: "Germany",
+  France: "France",
+  Israel: "Israel",
+  India: "India",
+  Singapore: "Singapore",
+  Japan: "Japan",
+  Australia: "Australia",
+  Canada: "Canada",
+  Brazil: "Brazil",
+};
+
 export function aggregateByCountry(list: Company[]): CountryAgg[] {
   const map = new Map<string, CountryAgg>();
   for (const c of list) {

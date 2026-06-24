@@ -39,18 +39,12 @@ npm run dev
 # open http://localhost:3000
 ```
 
-### Mapbox token (optional)
+### Map view — no token needed
 
-The **Globe** and **List/Board** views work with zero configuration. The **Map**
-view needs a free Mapbox token:
-
-```bash
-cp .env.local.example .env.local
-# then paste your token (starts with pk.) into NEXT_PUBLIC_MAPBOX_TOKEN
-```
-
-Get one at <https://account.mapbox.com/access-tokens/>. Without a token the Map
-view shows a friendly placeholder explaining where to add it.
+All three views work with **zero configuration**. The Map view uses a token-free
+[MapLibre GL](https://maplibre.org/) basemap (CARTO dark-matter), so it renders
+for anyone with no API key. To use Mapbox proper instead, swap the `STYLE` URL in
+`components/MapView.tsx` for a Mapbox style and set your token.
 
 ## The data
 

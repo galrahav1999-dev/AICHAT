@@ -7,7 +7,7 @@ import { RepAvatar, WarnIcon } from "./ui";
 
 export default function FilterBar() {
   const repFilter = useCockpit((s) => s.repFilter);
-  const filterToRep = useCockpit((s) => s.filterToRep);
+  const setRepFilter = useCockpit((s) => s.setRepFilter);
   const overlapsOnly = useCockpit((s) => s.overlapsOnly);
   const toggleOverlapsOnly = useCockpit((s) => s.toggleOverlapsOnly);
 
@@ -23,14 +23,14 @@ export default function FilterBar() {
         <span className="px-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
           Book
         </span>
-        <RepPill active={repFilter === "all"} onClick={() => filterToRep("all")} dot="#94a3b8">
+        <RepPill active={repFilter === "all"} onClick={() => setRepFilter("all")} dot="#94a3b8">
           Whole team
         </RepPill>
         {REPS.map((rep) => (
           <RepPill
             key={rep}
             active={repFilter === rep}
-            onClick={() => filterToRep(rep)}
+            onClick={() => setRepFilter(rep)}
             dot={REP_COLORS[rep]}
           >
             <span className="flex items-center gap-1.5">

@@ -97,6 +97,7 @@ interface CockpitState {
   focusCompany: (companyId: string) => void;
   openRepView: (rep: string) => void;
   closeRepView: () => void;
+  closeCard: () => void;
   clearSelection: () => void;
 
   editDraft: (companyId: string, patch: Partial<Pick<Draft, "subject" | "body">>) => void;
@@ -192,8 +193,8 @@ export const useCockpit = create<CockpitState>((set) => ({
     set((s) => {
       if (s.panelOpen) return { panelOpen: false };
       if (s.metricsOpen) return { metricsOpen: false };
-      // Close the account dossier first (returns to the rep book if it's open).
-      if (s.drill === "company") return { drill: "city", selectedCompanyId: null };
+      // Close the account card (and its rep-book context) first.
+      if (s.drill === "company") return { drill: "city", selectedCompanyId: null, repView: null };
       if (s.repView) return { repView: null };
       if (s.drill === "city") return { drill: "country", selectedCity: null };
       if (s.drill === "country")
@@ -261,9 +262,12 @@ export const useCockpit = create<CockpitState>((set) => ({
     });
   },
   clearSelection: () => set({ selectedCompanyId: null, drill: "city" }),
-  // Open a rep's full book of business (a table you can toggle between).
-  openRepView: (rep) => set({ repView: rep, selectedCompanyId: null, drill: "city" }),
+  // Switch the open card's account list to this rep's whole book (keeps the
+  // current account selected so the dossier stays put).
+  openRepView: (rep) => set({ repView: rep }),
   closeRepView: () => set({ repView: null }),
+  // Fully close the account card (and any rep-book context).
+  closeCard: () => set({ selectedCompanyId: null, repView: null, drill: "city" }),
 
   editDraft: (companyId, patch) =>
     set((s) => ({

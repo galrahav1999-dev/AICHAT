@@ -32,9 +32,9 @@ const norm = (s: string) => s.trim().toLowerCase();
 const NEON = "#38e8ff";
 
 // Shared soft-glow sprite texture (radial gradient) for the neon beam tips.
-let GLOW_TEX: THREE.Texture | null = null;
-function glowTexture() {
-  if (GLOW_TEX) return GLOW_TEX;
+// Built once per GlobeView mount (not a module singleton) so a disposed
+// texture from a previous mount can never be reused.
+function makeGlowTexture() {
   const c = document.createElement("canvas");
   c.width = c.height = 64;
   const ctx = c.getContext("2d")!;
@@ -44,8 +44,7 @@ function glowTexture() {
   g.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 64, 64);
-  GLOW_TEX = new THREE.CanvasTexture(c);
-  return GLOW_TEX;
+  return new THREE.CanvasTexture(c);
 }
 
 export default function GlobeView() {
@@ -76,6 +75,7 @@ export default function GlobeView() {
   const isAggregate = drill === "globe" || drill === "country";
   const aggColor = repFilter !== "all" ? repColor(repFilter) : NEON;
   const dealCountries = useMemo(() => new Set(visible.map((c) => c.country)), [visible]);
+  const glowTex = useMemo(() => makeGlowTexture(), []);
 
   // --- Load country shapes once (browser fetch; globe works without them) ---
   useEffect(() => {
@@ -305,26 +305,35 @@ export default function GlobeView() {
         // --- Additive glow at each beam tip (the "neon") ---
         customLayerData={points as object[]}
         customThreeObject={(d: any) => {
-          const mat = new THREE.SpriteMaterial({
-            map: glowTexture(),
-            color: new THREE.Color(beamColor(d)),
-            blending: THREE.AdditiveBlending,
-            transparent: true,
-            depthWrite: false,
-            opacity: 0.9,
-          });
-          const sprite = new THREE.Sprite(mat);
-          sprite.raycast = () => {}; // never intercept beam/polygon clicks
-          return sprite;
+          try {
+            const mat = new THREE.SpriteMaterial({
+              map: glowTex,
+              color: new THREE.Color(beamColor(d)),
+              blending: THREE.AdditiveBlending,
+              transparent: true,
+              depthWrite: false,
+              opacity: 0.9,
+            });
+            const sprite = new THREE.Sprite(mat);
+            sprite.raycast = () => {}; // never intercept beam/polygon clicks
+            return sprite;
+          } catch {
+            return new THREE.Object3D();
+          }
         }}
         customThreeObjectUpdate={(obj: any, d: any) => {
-          const g = globeRef.current;
-          if (!g || typeof g.getCoords !== "function") return;
-          const { x, y, z } = g.getCoords(d.lat, d.lng, tipAlt(d));
-          obj.position.set(x, y, z);
-          (obj.material as THREE.SpriteMaterial).color.set(beamColor(d));
-          const s = beamLevel ? 7 + 12 * (d.value / maxValue) : d.kind === "company" ? (d.selected ? 14 : 10) : 15;
-          obj.scale.set(s, s, 1);
+          try {
+            const g = globeRef.current;
+            if (!g || typeof g.getCoords !== "function" || !obj?.material) return;
+            const coords = g.getCoords(d.lat, d.lng, tipAlt(d));
+            if (!coords) return;
+            obj.position.set(coords.x, coords.y, coords.z);
+            (obj.material as THREE.SpriteMaterial).color.set(beamColor(d));
+            const s = beamLevel ? 7 + 12 * (d.value / maxValue) : d.kind === "company" ? (d.selected ? 14 : 10) : 15;
+            obj.scale.set(s, s, 1);
+          } catch {
+            /* never let a transient three.js state crash the view */
+          }
         }}
         // --- Glow rings ---
         ringsData={ringData(points as any[])}

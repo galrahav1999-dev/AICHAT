@@ -53,14 +53,29 @@ function initials(name: string) {
 export default function CompanyCardReveal() {
   const drill = useCockpit((s) => s.drill);
   const selectedId = useCockpit((s) => s.selectedCompanyId);
+  const selectedCity = useCockpit((s) => s.selectedCity);
+  const repView = useCockpit((s) => s.repView);
   const stageOverrides = useCockpit((s) => s.stageOverrides);
-  const drillUp = useCockpit((s) => s.drillUp);
   const togglePanel = useCockpit((s) => s.togglePanel);
   const openRepView = useCockpit((s) => s.openRepView);
+  const closeRepView = useCockpit((s) => s.closeRepView);
+  const closeCard = useCockpit((s) => s.closeCard);
+  const selectCompany = useCockpit((s) => s.selectCompany);
 
   const overlaps = useMemo(() => overlappingNames(), []);
   const base = (selectedId ? companies.find((c) => c.id === selectedId) : null) ?? null;
   const company: Company | null = base && stageOverrides[base.id] ? { ...base, stage: stageOverrides[base.id] } : base;
+
+  // The togglable account list shown on the right of the card. Context is the
+  // rep's whole book when you've clicked the owner, otherwise the current city.
+  const railList = useMemo(() => {
+    const src = repView
+      ? companies.filter((c) => c.ownerRep === repView)
+      : companies.filter((c) => c.city === selectedCity);
+    return src
+      .map((c) => (stageOverrides[c.id] ? { ...c, stage: stageOverrides[c.id] } : c))
+      .sort((a, b) => b.dealValue - a.dealValue);
+  }, [repView, selectedCity, stageOverrides]);
 
   const dossier = useMemo(() => {
     if (!company) return null;
@@ -102,12 +117,10 @@ export default function CompanyCardReveal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="absolute inset-0 animate-fade-in bg-black/70 backdrop-blur-md" onClick={drillUp} />
+      <div className="absolute inset-0 animate-fade-in bg-black/70 backdrop-blur-md" onClick={closeCard} />
 
-      <div
-        key={company.id}
-        className="account-reveal relative z-10 flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-ink-900/95 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] md:flex-row"
-      >
+      <div className="relative z-10 flex max-h-full w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-ink-900/95 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] animate-fade-in lg:flex-row">
+        <div key={company.id} className="account-reveal flex min-w-0 flex-1 flex-col md:flex-row">
         {/* ---- LEFT: company logo / identity ---- */}
         <aside
           className="relative flex shrink-0 flex-col items-center gap-4 border-b border-white/5 p-6 md:w-[270px] md:border-b-0 md:border-r"
@@ -161,7 +174,7 @@ export default function CompanyCardReveal() {
         {/* ---- RIGHT: account data card ---- */}
         <div className="relative min-w-0 flex-1 overflow-y-auto">
           <button
-            onClick={drillUp}
+            onClick={closeCard}
             className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white"
             aria-label="Close"
           >
@@ -240,8 +253,81 @@ export default function CompanyCardReveal() {
             </div>
           </div>
         </div>
+        </div>
+
+        {/* ---- RIGHT: togglable account list ---- */}
+        <AccountRail
+          list={railList}
+          activeId={company.id}
+          inRepView={!!repView}
+          context={repView ? `${repView.split(" ")[0]}'s book` : selectedCity ?? "Nearby"}
+          accent={accent}
+          onPick={selectCompany}
+          onCity={closeRepView}
+          onRep={() => openRepView(company.ownerRep)}
+        />
       </div>
     </div>
+  );
+}
+
+function AccountRail({
+  list,
+  activeId,
+  inRepView,
+  context,
+  accent,
+  onPick,
+  onCity,
+  onRep,
+}: {
+  list: Company[];
+  activeId: string;
+  inRepView: boolean;
+  context: string;
+  accent: string;
+  onPick: (c: Company) => void;
+  onCity: () => void;
+  onRep: () => void;
+}) {
+  return (
+    <aside className="hidden w-[230px] shrink-0 flex-col border-l border-white/5 bg-ink-950/40 lg:flex">
+      <div className="border-b border-white/5 p-3">
+        <div className="label-eyebrow">Browse · {context}</div>
+        <div className="mt-2 flex gap-1">
+          <button
+            onClick={onCity}
+            className={`chip flex-1 justify-center ${!inRepView ? "bg-white/10 text-white ring-1 ring-white/15" : "text-slate-400 hover:bg-white/5"}`}
+          >
+            This city
+          </button>
+          <button
+            onClick={onRep}
+            className={`chip flex-1 justify-center ${inRepView ? "bg-white/10 text-white ring-1 ring-white/15" : "text-slate-400 hover:bg-white/5"}`}
+          >
+            Owner’s book
+          </button>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+        {list.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => onPick(c)}
+            className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors ${
+              c.id === activeId ? "bg-accent/15 ring-1 ring-accent/30" : "hover:bg-white/5"
+            }`}
+          >
+            <RepAvatar rep={c.ownerRep} size={20} />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-medium text-white">{c.name}</div>
+              <div className="truncate text-[10px] text-slate-500">{c.stage}</div>
+            </div>
+            <span className="text-[11px] font-semibold tabular-nums text-slate-300">{fmtMoney(c.dealValue)}</span>
+          </button>
+        ))}
+      </div>
+    </aside>
   );
 }
 

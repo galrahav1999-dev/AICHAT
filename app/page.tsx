@@ -7,7 +7,6 @@ import FilterBar from "@/components/FilterBar";
 import DrillPanel from "@/components/DrillPanel";
 import ListBoardView from "@/components/ListBoardView";
 import CompanyCardReveal from "@/components/CompanyCardReveal";
-import RepView from "@/components/RepView";
 import AutomationPanel from "@/components/AutomationPanel";
 import MetricsPanel from "@/components/MetricsPanel";
 import OverlapAlert from "@/components/OverlapAlert";
@@ -81,9 +80,8 @@ export default function Page() {
               </>
             )}
 
-            {/* Rep book (table) sits under the dossier so you can toggle */}
-            <RepView />
-            {/* Selecting an account anywhere reveals its dossier */}
+            {/* Selecting an account anywhere reveals its dossier (with a
+                togglable account list inside) */}
             <CompanyCardReveal />
           </>
         )}

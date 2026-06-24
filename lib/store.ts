@@ -58,6 +58,7 @@ interface CockpitState {
   // --- Automation queue ---
   drafts: Record<string, Draft>;
   panelOpen: boolean;
+  panelFocusId: string | null; // when set, the panel shows just this account
 
   // --- Team metrics drawer ---
   metricsOpen: boolean;
@@ -80,6 +81,8 @@ interface CockpitState {
   resetFilters: () => void;
   setCrm: (c: CrmOption) => void;
   togglePanel: (open?: boolean) => void;
+  openApprovals: () => void;
+  draftFollowUp: (companyId: string) => void;
   toggleMetrics: (open?: boolean) => void;
   toggleOverlapsView: (open?: boolean) => void;
   toggleSound: (on?: boolean) => void;
@@ -137,6 +140,7 @@ export const useCockpit = create<CockpitState>((set) => ({
 
   drafts: initialDrafts,
   panelOpen: false,
+  panelFocusId: null,
   metricsOpen: false,
   overlapsView: false,
 
@@ -230,6 +234,15 @@ export const useCockpit = create<CockpitState>((set) => ({
     })),
   setCrm: (crm) => set({ crm }),
   togglePanel: (open) => set((s) => ({ panelOpen: open ?? !s.panelOpen })),
+  // Header "Approvals" → show the whole queue.
+  openApprovals: () => set({ panelOpen: true, panelFocusId: null }),
+  // From an account → ensure it has a draft and show only that one.
+  draftFollowUp: (companyId) =>
+    set((s) => {
+      const c = companies.find((x) => x.id === companyId);
+      const drafts = s.drafts[companyId] || !c ? s.drafts : { ...s.drafts, [companyId]: buildDraft(c) };
+      return { drafts, panelOpen: true, panelFocusId: companyId };
+    }),
   toggleMetrics: (open) => set((s) => ({ metricsOpen: open ?? !s.metricsOpen })),
   toggleOverlapsView: (open) => set((s) => ({ overlapsView: open ?? !s.overlapsView })),
   toggleSound: (on) => set((s) => ({ soundOn: on ?? !s.soundOn })),

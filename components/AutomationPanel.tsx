@@ -8,10 +8,12 @@ import { RepAvatar, StageBadge, SparkIcon } from "./ui";
 export default function AutomationPanel() {
   const open = useCockpit((s) => s.panelOpen);
   const togglePanel = useCockpit((s) => s.togglePanel);
+  const openApprovals = useCockpit((s) => s.openApprovals);
+  const focusId = useCockpit((s) => s.panelFocusId);
   const drafts = useCockpit((s) => s.drafts);
 
   const pending = pendingCount(drafts);
-  const items = Object.values(drafts);
+  const items = focusId ? Object.values(drafts).filter((d) => d.companyId === focusId) : Object.values(drafts);
   const queued = items.filter((d) => d.status === "queued");
   const resolved = items.filter((d) => d.status !== "queued");
 
@@ -52,15 +54,27 @@ export default function AutomationPanel() {
           </button>
         </div>
 
-        {/* Approval indicator */}
-        <div className="flex items-center gap-2 border-b border-white/5 bg-accent/5 px-4 py-3">
-          <span className="grid h-6 min-w-6 place-items-center rounded-full bg-accent px-1.5 text-xs font-bold text-white">
-            {pending}
-          </span>
-          <span className="text-sm font-medium text-slate-200">
-            follow-up{pending === 1 ? "" : "s"} awaiting your approval
-          </span>
-        </div>
+        {/* Approval indicator (or focused-account banner) */}
+        {focusId ? (
+          <button
+            onClick={openApprovals}
+            className="flex w-full items-center gap-2 border-b border-white/5 bg-accent/5 px-4 py-3 text-left hover:bg-accent/10"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 text-accent-soft" fill="none">
+              <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-sm font-medium text-slate-200">This account · view all {pending} approvals</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-2 border-b border-white/5 bg-accent/5 px-4 py-3">
+            <span className="grid h-6 min-w-6 place-items-center rounded-full bg-accent px-1.5 text-xs font-bold text-white">
+              {pending}
+            </span>
+            <span className="text-sm font-medium text-slate-200">
+              follow-up{pending === 1 ? "" : "s"} awaiting your approval
+            </span>
+          </div>
+        )}
 
         {/* Principle banner */}
         <div className="flex items-center gap-2 border-b border-white/5 px-4 py-2.5 text-[11px] text-emerald-300/90">

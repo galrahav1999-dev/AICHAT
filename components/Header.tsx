@@ -22,7 +22,7 @@ export default function Header() {
   const view = useCockpit((s) => s.view);
   const setView = useCockpit((s) => s.setView);
   const drafts = useCockpit((s) => s.drafts);
-  const togglePanel = useCockpit((s) => s.togglePanel);
+  const openApprovals = useCockpit((s) => s.openApprovals);
   const pending = pendingCount(drafts);
 
   return (
@@ -80,7 +80,7 @@ export default function Header() {
 
       {/* Automation trigger */}
       <button
-        onClick={() => togglePanel(true)}
+        onClick={openApprovals}
         className="btn relative gap-2 bg-ink-800/80 ring-1 ring-white/5 hover:ring-accent/40"
       >
         <SparkIcon className="h-4 w-4 text-accent-soft" />

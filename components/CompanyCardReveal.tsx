@@ -56,7 +56,7 @@ export default function CompanyCardReveal() {
   const selectedCity = useCockpit((s) => s.selectedCity);
   const repView = useCockpit((s) => s.repView);
   const stageOverrides = useCockpit((s) => s.stageOverrides);
-  const togglePanel = useCockpit((s) => s.togglePanel);
+  const draftFollowUp = useCockpit((s) => s.draftFollowUp);
   const openRepView = useCockpit((s) => s.openRepView);
   const closeRepView = useCockpit((s) => s.closeRepView);
   const closeCard = useCockpit((s) => s.closeCard);
@@ -247,7 +247,7 @@ export default function CompanyCardReveal() {
                 <SparkIcon className="h-3.5 w-3.5" /> AI-suggested follow-up
               </div>
               <p className="text-sm leading-relaxed text-slate-200">{company.aiFollowUp || "Re-engage with a tailored value recap."}</p>
-              <button onClick={() => togglePanel(true)} className="btn-primary mt-3 w-full">
+              <button onClick={() => draftFollowUp(company.id)} className="btn-primary mt-3 w-full">
                 <SparkIcon className="h-4 w-4" /> Draft follow-up for approval
               </button>
             </div>

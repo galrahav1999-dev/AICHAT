@@ -10,6 +10,7 @@ import {
   fmtDate,
   relativeFromToday,
   daysFromToday,
+  repColor,
 } from "@/lib/data";
 import { useCockpit } from "@/lib/store";
 import { useFiltered } from "@/lib/useFiltered";
@@ -247,7 +248,7 @@ function Table({
   );
 }
 
-/* ---------------- Board ---------------- */
+/* ---------------- Board (drag between stages) ---------------- */
 function Board({
   rows,
   selectedId,
@@ -259,17 +260,28 @@ function Board({
   onSelect: (c: Company) => void;
   isOverlap: (c: Company) => boolean;
 }) {
+  const moveStage = useCockpit((s) => s.moveStage);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overStage, setOverStage] = useState<Stage | null>(null);
+
+  function onDrop(stage: Stage) {
+    if (dragId) moveStage(dragId, stage);
+    setDragId(null);
+    setOverStage(null);
+  }
+
   return (
     <div className="flex h-full gap-3 overflow-x-auto p-3 sm:p-4">
       {STAGE_ORDER.map((stage) => {
         const items = rows.filter((c) => c.stage === stage);
         const total = items.reduce((s, c) => s + c.dealValue, 0);
         const color = STAGE_COLORS[stage];
+        const isOver = overStage === stage && dragId;
         return (
-          <div key={stage} className="flex w-[260px] shrink-0 flex-col">
+          <div key={stage} className="flex w-[270px] shrink-0 flex-col">
             <div className="mb-2 flex items-center justify-between px-1">
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}` }} />
                 <span className="text-sm font-semibold text-white">{stage}</span>
                 <span className="text-xs text-slate-500">{items.length}</span>
               </div>
@@ -278,23 +290,49 @@ function Board({
               </span>
             </div>
             <div
-              className="flex-1 space-y-2 rounded-2xl border border-white/5 bg-ink-900/40 p-2"
+              onDragOver={(e) => {
+                if (!dragId) return;
+                e.preventDefault();
+                setOverStage(stage);
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget === e.target) setOverStage(null);
+              }}
+              onDrop={() => onDrop(stage)}
+              className={`flex-1 space-y-2 rounded-2xl border p-2 transition-colors ${
+                isOver ? "border-accent/50 bg-accent/5" : "border-white/5 bg-ink-900/40"
+              }`}
               style={{ boxShadow: `inset 0 2px 0 -1px ${color}55` }}
             >
               {items.length === 0 && (
-                <div className="py-6 text-center text-xs text-slate-600">No deals</div>
+                <div
+                  className={`py-8 text-center text-xs ${isOver ? "text-accent-soft" : "text-slate-600"}`}
+                >
+                  {isOver ? "Drop here" : "No deals"}
+                </div>
               )}
               {items.map((c) => {
                 const overdue = (daysFromToday(c.nextFollowUp) ?? 1) <= 0 && c.nextFollowUp;
+                const rc = repColor(c.ownerRep);
                 return (
-                  <button
+                  <div
                     key={c.id}
+                    draggable
+                    onDragStart={(e) => {
+                      setDragId(c.id);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragEnd={() => {
+                      setDragId(null);
+                      setOverStage(null);
+                    }}
                     onClick={() => onSelect(c)}
-                    className={`w-full rounded-xl border p-2.5 text-left transition-all ${
+                    className={`cursor-grab rounded-xl border bg-ink-850/80 p-2.5 text-left transition-all active:cursor-grabbing ${
                       selectedId === c.id
-                        ? "border-accent/50 bg-accent/10"
-                        : "border-white/5 bg-ink-850/80 hover:border-white/10 hover:bg-ink-800"
-                    }`}
+                        ? "border-accent/50 ring-1 ring-accent/30"
+                        : "border-white/5 hover:border-white/15 hover:bg-ink-800"
+                    } ${dragId === c.id ? "opacity-40" : ""}`}
+                    style={{ borderLeft: `3px solid ${rc}` }}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-sm font-medium leading-tight text-white">{c.name}</span>
@@ -312,14 +350,22 @@ function Board({
                         {fmtMoney(c.dealValue)}
                       </span>
                     </div>
-                    {c.nextFollowUp && (
-                      <div
-                        className={`mt-1.5 text-[11px] ${overdue ? "font-medium text-rose-400" : "text-slate-500"}`}
-                      >
-                        Follow-up {relativeFromToday(c.nextFollowUp)}
-                      </div>
-                    )}
-                  </button>
+                    <div className="mt-2 flex items-center justify-between border-t border-white/5 pt-1.5 text-[10px]">
+                      <span className="text-slate-500">Last: {fmtDate(c.lastActivity)}</span>
+                      {c.nextFollowUp ? (
+                        <span
+                          className={`flex items-center gap-1 ${overdue ? "font-medium text-rose-400" : "text-slate-500"}`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${overdue ? "bg-rose-400" : "bg-slate-600"}`}
+                          />
+                          {relativeFromToday(c.nextFollowUp)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-600">—</span>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>

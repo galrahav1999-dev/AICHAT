@@ -1,6 +1,6 @@
 "use client";
 
-import { companies, fmtMoney, fmtDate, relativeFromToday, repsForName, daysFromToday } from "@/lib/data";
+import { companies, fmtMoney, fmtDate, relativeFromToday, repsForName, daysFromToday, repColor } from "@/lib/data";
 import { overlappingNames } from "@/lib/data";
 import { useCockpit } from "@/lib/store";
 import { RepAvatar, StageBadge, OverlapBadge, SparkIcon, WarnIcon } from "./ui";
@@ -9,14 +9,18 @@ import { useMemo } from "react";
 export default function AccountDetailCard() {
   const selectedId = useCockpit((s) => s.selectedCompanyId);
   const drill = useCockpit((s) => s.drill);
+  const stageOverrides = useCockpit((s) => s.stageOverrides);
   const clearSelection = useCockpit((s) => s.clearSelection);
   const togglePanel = useCockpit((s) => s.togglePanel);
 
   const overlaps = useMemo(() => overlappingNames(), []);
-  const company = selectedId ? companies.find((c) => c.id === selectedId) : null;
+  const base = selectedId ? companies.find((c) => c.id === selectedId) : null;
+  const company =
+    base && stageOverrides[base.id] ? { ...base, stage: stageOverrides[base.id] } : base;
 
   if (!company || drill !== "company") return null;
 
+  const accent = repColor(company.ownerRep);
   const isOverlap = overlaps.has(company.name.toLowerCase());
   const otherReps = repsForName(company.name).filter((r) => r !== company.ownerRep);
   const dueIn = daysFromToday(company.nextFollowUp);
@@ -25,6 +29,8 @@ export default function AccountDetailCard() {
   return (
     <div className="pointer-events-auto absolute right-3 top-3 z-20 w-[340px] max-w-[calc(100%-1.5rem)] animate-slide-in sm:right-4 sm:top-4">
       <div className="card overflow-hidden">
+        {/* Rep-color accent strip */}
+        <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${accent}, ${accent}33)` }} />
         {/* Header band */}
         <div className="relative border-b border-white/5 p-4">
           <button

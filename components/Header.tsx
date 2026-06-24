@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCockpit, pendingCount, type CrmOption } from "@/lib/store";
-import { companies, fmtMoney, isOpen } from "@/lib/data";
-import { SparkIcon } from "./ui";
+import { companies, fmtMoney, isOpen, overlappingNames, OVERLAP_COLOR } from "@/lib/data";
+import { SparkIcon, WarnIcon } from "./ui";
+import { startAmbient, stopAmbient } from "@/lib/ambientAudio";
 import type { ViewMode } from "@/lib/types";
 
 const VIEWS: { id: ViewMode; label: string; icon: React.ReactNode }[] = [
@@ -66,7 +67,12 @@ export default function Header() {
         <Kpi label="Accounts" value={String(companies.length)} />
       </div>
 
+      {/* Overlap indicator — always visible, headline team-selling signal */}
+      <OverlapIndicator />
+
       <div className="flex-1" />
+
+      <SoundToggle />
 
       {/* CRM connector (cosmetic) */}
       <CrmMenu />
@@ -85,6 +91,69 @@ export default function Header() {
         )}
       </button>
     </header>
+  );
+}
+
+function OverlapIndicator() {
+  const overlapsOnly = useCockpit((s) => s.overlapsOnly);
+  const toggleOverlapsOnly = useCockpit((s) => s.toggleOverlapsOnly);
+  const count = useMemo(() => overlappingNames(companies).size, []);
+  if (count === 0) return null;
+  return (
+    <button
+      onClick={toggleOverlapsOnly}
+      title="Accounts worked by more than one rep"
+      className={`ml-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-all ${
+        overlapsOnly
+          ? "bg-amber-400/25 text-amber-200 ring-1 ring-amber-400/50"
+          : "bg-amber-400/10 text-amber-300 ring-1 ring-amber-400/25 hover:bg-amber-400/20"
+      }`}
+      style={{ boxShadow: overlapsOnly ? `0 0 18px -4px ${OVERLAP_COLOR}` : undefined }}
+    >
+      <WarnIcon className="h-4 w-4 animate-pulse-glow" />
+      <span className="tabular-nums">{count}</span>
+      <span className="hidden sm:inline">overlap{count === 1 ? "" : "s"}</span>
+    </button>
+  );
+}
+
+function SoundToggle() {
+  const soundOn = useCockpit((s) => s.soundOn);
+  const toggleSound = useCockpit((s) => s.toggleSound);
+
+  useEffect(() => {
+    if (soundOn) startAmbient();
+    else stopAmbient();
+  }, [soundOn]);
+
+  return (
+    <button
+      onClick={() => toggleSound()}
+      title={soundOn ? "Mute ambient sound" : "Ambient sound"}
+      aria-pressed={soundOn}
+      className={`btn h-9 w-9 !px-0 ring-1 ring-white/5 ${
+        soundOn ? "bg-accent/15 text-accent-soft" : "bg-ink-800/80 text-slate-400 hover:text-white"
+      }`}
+    >
+      {soundOn ? <SpeakerOnIcon /> : <SpeakerOffIcon />}
+    </button>
+  );
+}
+
+function SpeakerOnIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
+      <path d="M11 5 6 9H3v6h3l5 4V5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+function SpeakerOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
+      <path d="M11 5 6 9H3v6h3l5 4V5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="m16 9 5 6m0-6-5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
   );
 }
 

@@ -11,16 +11,23 @@ import type { Company } from "./types";
 export function useFiltered() {
   const repFilter = useCockpit((s) => s.repFilter);
   const overlapsOnly = useCockpit((s) => s.overlapsOnly);
+  const stageOverrides = useCockpit((s) => s.stageOverrides);
 
   const overlaps = useMemo(() => overlappingNames(companies), []);
 
+  // Apply local board moves (stage overrides) so every view stays in sync.
+  const withStage: Company[] = useMemo(
+    () => companies.map((c) => (stageOverrides[c.id] ? { ...c, stage: stageOverrides[c.id] } : c)),
+    [stageOverrides]
+  );
+
   const visible: Company[] = useMemo(() => {
-    return companies.filter((c) => {
+    return withStage.filter((c) => {
       if (repFilter !== "all" && c.ownerRep !== repFilter) return false;
       if (overlapsOnly && !isOverlap(c, overlaps)) return false;
       return true;
     });
-  }, [repFilter, overlapsOnly, overlaps]);
+  }, [withStage, repFilter, overlapsOnly, overlaps]);
 
   return { visible, overlaps };
 }

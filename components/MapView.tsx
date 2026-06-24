@@ -5,7 +5,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useCockpit } from "@/lib/store";
 import { useFiltered } from "@/lib/useFiltered";
-import { STAGE_COLORS, fmtMoney, companies as ALL, overlappingNames } from "@/lib/data";
+import { repColor, fmtMoney, companies as ALL, overlappingNames } from "@/lib/data";
 import type { Company } from "@/lib/types";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -161,7 +161,7 @@ export default function MapView() {
 function makeMarkerEl(c: Company, overlap: boolean): HTMLDivElement {
   const el = document.createElement("div");
   el.className = `cockpit-marker${overlap ? " is-overlap" : ""}`;
-  const color = STAGE_COLORS[c.stage];
+  const color = repColor(c.ownerRep);
   el.style.setProperty("--c", color);
   el.style.background = color;
   el.style.position = "relative";

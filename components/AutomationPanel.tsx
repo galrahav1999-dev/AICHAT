@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { companies, fmtMoney, relativeFromToday } from "@/lib/data";
+import { companies, fmtMoney, relativeFromToday, repColor } from "@/lib/data";
 import { useCockpit, pendingCount, type Draft } from "@/lib/store";
 import { RepAvatar, StageBadge, SparkIcon } from "./ui";
 
@@ -9,7 +9,6 @@ export default function AutomationPanel() {
   const open = useCockpit((s) => s.panelOpen);
   const togglePanel = useCockpit((s) => s.togglePanel);
   const drafts = useCockpit((s) => s.drafts);
-  const selectCompany = useCockpit((s) => s.selectCompany);
 
   const pending = pendingCount(drafts);
   const items = Object.values(drafts);
@@ -74,7 +73,7 @@ export default function AutomationPanel() {
           {queued.length === 0 && resolved.length === 0 && <EmptyState />}
 
           {queued.map((d) => (
-            <DraftCard key={d.companyId} draft={d} onOpenAccount={selectCompany} />
+            <DraftCard key={d.companyId} draft={d} />
           ))}
 
           {resolved.length > 0 && (
@@ -95,40 +94,37 @@ export default function AutomationPanel() {
   );
 }
 
-function DraftCard({
-  draft,
-  onOpenAccount,
-}: {
-  draft: Draft;
-  onOpenAccount: (c: (typeof companies)[number]) => void;
-}) {
+function DraftCard({ draft }: { draft: Draft }) {
   const company = companies.find((c) => c.id === draft.companyId)!;
   const editDraft = useCockpit((s) => s.editDraft);
   const sendDraft = useCockpit((s) => s.sendDraft);
   const vetoDraft = useCockpit((s) => s.vetoDraft);
-  const togglePanel = useCockpit((s) => s.togglePanel);
+  const focusCompany = useCockpit((s) => s.focusCompany);
 
   const [mode, setMode] = useState<"collapsed" | "preview" | "edit">("collapsed");
 
   const overdue = (relativeFromToday(company.nextFollowUp) || "").includes("ago");
+  const accent = repColor(company.ownerRep);
 
   return (
-    <div className="animate-fade-in rounded-2xl border border-white/5 bg-ink-850/80 p-3 shadow-card">
-      {/* Account row */}
-      <div className="flex items-center gap-2.5">
+    <div
+      className="animate-fade-in rounded-2xl border border-white/5 bg-ink-850/80 p-3 shadow-card"
+      style={{ borderLeft: `3px solid ${accent}` }}
+    >
+      {/* Account row — click to fly the globe to this account */}
+      <button
+        onClick={() => focusCompany(company.id)}
+        className="group flex w-full items-center gap-2.5 text-left"
+        title="Show on globe"
+      >
         <RepAvatar rep={company.ownerRep} size={28} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                onOpenAccount(company);
-                togglePanel(false);
-              }}
-              className="truncate text-sm font-semibold text-white hover:text-accent-soft"
-            >
+            <span className="truncate text-sm font-semibold text-white group-hover:text-accent-soft">
               {company.name}
-            </button>
+            </span>
             <span className="text-[11px] text-slate-500">{fmtMoney(company.dealValue)}</span>
+            <LocateIcon className="h-3.5 w-3.5 text-slate-600 opacity-0 transition-opacity group-hover:opacity-100" />
           </div>
           <div className="flex items-center gap-2 text-[11px]">
             <span className={overdue ? "font-medium text-rose-400" : "text-slate-500"}>
@@ -139,7 +135,7 @@ function DraftCard({
           </div>
         </div>
         <StageBadge stage={company.stage} />
-      </div>
+      </button>
 
       {/* Draft body */}
       <div className="mt-3 rounded-xl border border-white/5 bg-ink-900/60 p-3">
@@ -241,6 +237,14 @@ function EmptyState() {
 }
 
 /* --- icons --- */
+function LocateIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M12 2v3m0 14v3m10-10h-3M5 12H2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
 function LockIcon({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden>

@@ -1,8 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import type { Company, DrillLevel, ViewMode } from "./types";
-import { companies, dueFollowUps, fmtMoney, relativeFromToday } from "./data";
+import type { Company, DrillLevel, Stage, ViewMode } from "./types";
+import { companies, dueFollowUps, fmtMoney, isOpen, relativeFromToday } from "./data";
 
 export type CrmOption = "HubSpot" | "Salesforce" | "Pipedrive";
 export type DraftStatus = "queued" | "sent" | "vetoed";
@@ -47,17 +47,28 @@ interface CockpitState {
   drafts: Record<string, Draft>;
   panelOpen: boolean;
 
+  // --- Board drag-and-drop (local stage moves) ---
+  stageOverrides: Record<string, Stage>;
+
+  // --- Ambient sound (off by default, never autoplays) ---
+  soundOn: boolean;
+
   // --- Actions ---
   setView: (v: ViewMode) => void;
   setRepFilter: (rep: string) => void;
+  filterToRep: (rep: string) => void;
   toggleOverlapsOnly: () => void;
   setCrm: (c: CrmOption) => void;
   togglePanel: (open?: boolean) => void;
+  toggleSound: (on?: boolean) => void;
+  moveStage: (companyId: string, stage: Stage) => void;
 
   drillToGlobe: () => void;
   drillToCountry: (country: string) => void;
   drillToCity: (country: string, city: string) => void;
+  drillUp: () => void;
   selectCompany: (company: Company) => void;
+  focusCompany: (companyId: string) => void;
   clearSelection: () => void;
 
   editDraft: (companyId: string, patch: Partial<Pick<Draft, "subject" | "body">>) => void;
@@ -84,11 +95,45 @@ export const useCockpit = create<CockpitState>((set) => ({
   drafts: initialDrafts,
   panelOpen: false,
 
+  stageOverrides: {},
+  soundOn: false,
+
   setView: (v) => set({ view: v }),
   setRepFilter: (rep) => set({ repFilter: rep }),
+  // Smart filter: flying the camera to the rep's biggest deal and opening it.
+  filterToRep: (rep) => {
+    if (rep === "all") {
+      set({
+        repFilter: "all",
+        drill: "globe",
+        selectedCountry: null,
+        selectedCity: null,
+        selectedCompanyId: null,
+      });
+      return;
+    }
+    const book = companies.filter((c) => c.ownerRep === rep);
+    const open = book.filter(isOpen);
+    const pool = open.length ? open : book;
+    const top = pool.slice().sort((a, b) => b.dealValue - a.dealValue)[0];
+    set({
+      repFilter: rep,
+      ...(top
+        ? {
+            drill: "company",
+            selectedCountry: top.country,
+            selectedCity: top.city,
+            selectedCompanyId: top.id,
+          }
+        : {}),
+    });
+  },
   toggleOverlapsOnly: () => set((s) => ({ overlapsOnly: !s.overlapsOnly })),
   setCrm: (crm) => set({ crm }),
   togglePanel: (open) => set((s) => ({ panelOpen: open ?? !s.panelOpen })),
+  toggleSound: (on) => set((s) => ({ soundOn: on ?? !s.soundOn })),
+  moveStage: (companyId, stage) =>
+    set((s) => ({ stageOverrides: { ...s.stageOverrides, [companyId]: stage } })),
 
   drillToGlobe: () =>
     set({ drill: "globe", selectedCountry: null, selectedCity: null, selectedCompanyId: null }),
@@ -96,6 +141,12 @@ export const useCockpit = create<CockpitState>((set) => ({
     set({ drill: "country", selectedCountry: country, selectedCity: null, selectedCompanyId: null }),
   drillToCity: (country, city) =>
     set({ drill: "city", selectedCountry: country, selectedCity: city, selectedCompanyId: null }),
+  drillUp: () =>
+    set((s) => {
+      if (s.drill === "company") return { drill: "city", selectedCompanyId: null };
+      if (s.drill === "city") return { drill: "country", selectedCity: null };
+      return { drill: "globe", selectedCountry: null, selectedCity: null, selectedCompanyId: null };
+    }),
   selectCompany: (company) =>
     set({
       drill: "company",
@@ -103,6 +154,19 @@ export const useCockpit = create<CockpitState>((set) => ({
       selectedCity: company.city,
       selectedCompanyId: company.id,
     }),
+  // From the follow-up panel: jump to the globe and fly to the account.
+  focusCompany: (companyId) => {
+    const c = companies.find((x) => x.id === companyId);
+    if (!c) return;
+    set({
+      view: "globe",
+      panelOpen: false,
+      drill: "company",
+      selectedCountry: c.country,
+      selectedCity: c.city,
+      selectedCompanyId: c.id,
+    });
+  },
   clearSelection: () => set({ selectedCompanyId: null, drill: "city" }),
 
   editDraft: (companyId, patch) =>

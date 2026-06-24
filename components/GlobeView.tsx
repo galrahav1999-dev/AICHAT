@@ -9,39 +9,35 @@ import {
   aggregateByCountry,
   companies as ALL,
   fmtMoney,
-  STAGE_COLORS,
+  repColor,
+  rgba,
+  OVERLAP_COLOR,
+  REPS,
+  REP_COLORS,
 } from "@/lib/data";
-import type { Company, Stage } from "@/lib/types";
+import type { Company } from "@/lib/types";
 
 const NIGHT = "//unpkg.com/three-globe/example/img/earth-night.jpg";
 const BUMP = "//unpkg.com/three-globe/example/img/earth-topology.png";
 
 // Altitude (camera distance) per drill level — smaller = closer in.
-const ALT = { globe: 2.5, country: 1.15, city: 0.45, company: 0.28 } as const;
-const FLY_MS = 1600;
+// `street` is the brief office/city settle before the account card resolves.
+const ALT = { globe: 2.5, country: 1.15, city: 0.5, street: 0.62, company: 0.26 } as const;
+const FLY_MS = 1500;
 
-type Pt =
-  | { kind: "country"; country: string; lat: number; lng: number; value: number; count: number }
-  | { kind: "city"; country: string; city: string; lat: number; lng: number; value: number; count: number }
-  | {
-      kind: "company";
-      company: Company;
-      lat: number;
-      lng: number;
-      value: number;
-      count: number;
-      selected: boolean;
-    };
+const norm = (s: string) => s.trim().toLowerCase();
 
 export default function GlobeView() {
   const globeRef = useRef<any>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [ready, setReady] = useState(false);
 
-  const { visible } = useFiltered();
+  const { visible, overlaps } = useFiltered();
 
   const drill = useCockpit((s) => s.drill);
+  const repFilter = useCockpit((s) => s.repFilter);
   const selectedCountry = useCockpit((s) => s.selectedCountry);
   const selectedCity = useCockpit((s) => s.selectedCity);
   const selectedCompanyId = useCockpit((s) => s.selectedCompanyId);
@@ -49,116 +45,132 @@ export default function GlobeView() {
   const drillToCity = useCockpit((s) => s.drillToCity);
   const selectCompany = useCockpit((s) => s.selectCompany);
 
+  const selectRef = useRef(selectCompany);
+  selectRef.current = selectCompany;
+
+  const isAggregate = drill === "globe" || drill === "country";
+
   // --- Responsive sizing ---
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => {
-      setSize({ w: e.contentRect.width, h: e.contentRect.height });
-    });
+    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  // --- Build the right point set for the current drill level ---
-  const points = useMemo<Pt[]>(() => {
+  // --- Point/beam data for the current level ---
+  const points = useMemo(() => {
     if (drill === "globe") {
       const aggs = aggregateByCountry(visible);
       const max = Math.max(1, ...aggs.map((a) => a.totalValue));
-      return aggs.map((a) => ({
-        kind: "country",
-        country: a.country,
-        lat: a.lat,
-        lng: a.lng,
-        value: a.totalValue,
-        count: a.dealCount,
-        _max: max,
-      })) as any;
+      return aggs.map((a) => ({ kind: "country", ...a, _max: max }));
     }
     if (drill === "country" && selectedCountry) {
       const aggs = aggregateByCity(visible, selectedCountry);
-      return aggs.map((a) => ({
-        kind: "city",
-        country: a.country,
-        city: a.city,
-        lat: a.lat,
-        lng: a.lng,
-        value: a.totalValue,
-        count: a.dealCount,
-      }));
+      const max = Math.max(1, ...aggs.map((a) => a.totalValue));
+      return aggs.map((a) => ({ kind: "city", ...a, _max: max }));
     }
-    // city / company level -> individual pins for the city
-    const list = visible.filter(
-      (c) => c.country === selectedCountry && c.city === selectedCity
-    );
+    // city / company → one rep-colored beam per account.
+    const list = visible.filter((c) => c.country === selectedCountry && c.city === selectedCity);
     return list.map((c) => ({
-      kind: "company",
+      kind: "company" as const,
       company: c,
       lat: c.lat,
       lng: c.lng,
       value: c.dealValue,
-      count: 1,
+      overlap: overlaps.has(norm(c.name)),
       selected: c.id === selectedCompanyId,
     }));
-  }, [drill, selectedCountry, selectedCity, selectedCompanyId, visible]);
+  }, [drill, selectedCountry, selectedCity, selectedCompanyId, visible, overlaps]);
 
-  const maxValue = useMemo(
-    () => Math.max(1, ...points.map((p) => p.value)),
-    [points]
-  );
+  const maxValue = useMemo(() => Math.max(1, ...points.map((p: any) => p.value)), [points]);
 
-  // --- Camera flight driven purely by state (keeps views in sync) ---
+  // --- HTML overlays: overlap warning badges + selected name label ---
+  const htmlData = useMemo(() => {
+    if (isAggregate) return [] as any[];
+    const inCity = visible.filter((c) => c.country === selectedCountry && c.city === selectedCity);
+
+    // one badge per overlapping account name (dedup the two rep records)
+    const byName = new Map<string, { name: string; lat: number; lng: number; reps: string[] }>();
+    for (const c of inCity) {
+      if (!overlaps.has(norm(c.name))) continue;
+      const e = byName.get(norm(c.name)) ?? { name: c.name, lat: 0, lng: 0, reps: [] };
+      e.lat += c.lat;
+      e.lng += c.lng;
+      if (!e.reps.includes(c.ownerRep)) e.reps.push(c.ownerRep);
+      byName.set(norm(c.name), e);
+    }
+    const badges = [...byName.values()].map((e) => ({
+      type: "overlap" as const,
+      lat: e.lat / 2,
+      lng: e.lng / 2,
+      reps: e.reps,
+    }));
+
+    const sel = inCity.find((c) => c.id === selectedCompanyId);
+    const label = sel ? [{ type: "label" as const, lat: sel.lat, lng: sel.lng, text: sel.name }] : [];
+    return [...badges, ...label];
+  }, [isAggregate, visible, selectedCountry, selectedCity, selectedCompanyId, overlaps]);
+
+  // --- Camera flights (state-driven so back / filters / panel all reuse it) ---
   useEffect(() => {
     const g = globeRef.current;
     if (!g) return;
-    let target: { lat: number; lng: number; altitude: number };
+    if (settleTimer.current) clearTimeout(settleTimer.current);
 
     if (drill === "company" && selectedCompanyId) {
-      const c = ALL.find((x) => x.id === selectedCompanyId)!;
-      target = { lat: c.lat, lng: c.lng, altitude: ALT.company };
+      const c = ALL.find((x) => x.id === selectedCompanyId);
+      if (!c) return;
+      // Two-stage: settle at street altitude, then resolve onto the office.
+      g.pointOfView({ lat: c.lat, lng: c.lng, altitude: ALT.street }, 750);
+      settleTimer.current = setTimeout(() => {
+        g.pointOfView({ lat: c.lat, lng: c.lng, altitude: ALT.company }, 950);
+      }, 780);
     } else if (drill === "city" && selectedCountry && selectedCity) {
       const a = aggregateByCity(ALL, selectedCountry).find((x) => x.city === selectedCity);
-      target = { lat: a?.lat ?? 0, lng: a?.lng ?? 0, altitude: ALT.city };
+      g.pointOfView({ lat: a?.lat ?? 0, lng: a?.lng ?? 0, altitude: ALT.city }, FLY_MS);
     } else if (drill === "country" && selectedCountry) {
       const a = aggregateByCountry(ALL).find((x) => x.country === selectedCountry);
-      target = { lat: a?.lat ?? 0, lng: a?.lng ?? 0, altitude: ALT.country };
+      g.pointOfView({ lat: a?.lat ?? 0, lng: a?.lng ?? 0, altitude: ALT.country }, FLY_MS);
     } else {
       const cur = g.pointOfView();
-      target = { lat: 18, lng: cur?.lng ?? 0, altitude: ALT.globe };
+      g.pointOfView({ lat: 18, lng: cur?.lng ?? 0, altitude: ALT.globe }, FLY_MS);
     }
-    g.pointOfView(target, FLY_MS);
+    return () => {
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+    };
   }, [drill, selectedCountry, selectedCity, selectedCompanyId]);
 
   // --- Auto-rotate only at the world level ---
   useEffect(() => {
     const g = globeRef.current;
     if (!g) return;
-    const controls = g.controls();
-    controls.autoRotate = drill === "globe";
-    controls.autoRotateSpeed = 0.45;
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.1;
+    const c = g.controls();
+    c.autoRotate = drill === "globe";
+    c.autoRotateSpeed = 0.45;
+    c.enableDamping = true;
+    c.dampingFactor = 0.1;
   }, [drill, ready]);
 
-  // Initial framing.
   useEffect(() => {
     const g = globeRef.current;
     if (g && ready) {
       g.pointOfView({ lat: 18, lng: -30, altitude: ALT.globe }, 0);
-      const controls = g.controls();
-      controls.minDistance = 110;
-      controls.maxDistance = 600;
+      const c = g.controls();
+      c.minDistance = 101;
+      c.maxDistance = 600;
     }
   }, [ready]);
 
-  function handleClick(pt: Pt | null) {
+  function handlePointClick(pt: any) {
     if (!pt) return;
     if (pt.kind === "country") drillToCountry(pt.country);
     else if (pt.kind === "city") drillToCity(pt.country, pt.city);
-    else selectCompany(pt.company);
+    else selectRef.current(pt.company);
   }
 
-  const isAggregate = drill === "globe" || drill === "country";
+  const aggColor = repFilter !== "all" ? repColor(repFilter) : "#818cf8";
 
   return (
     <div ref={wrapRef} className="relative h-full w-full">
@@ -184,78 +196,128 @@ export default function GlobeView() {
         atmosphereColor="#6f8bff"
         atmosphereAltitude={0.18}
         onGlobeReady={() => setReady(true)}
-        // points
+        // translucent neon beams (additive-feeling via low alpha + glow rings)
         pointsData={points as object[]}
         pointLat={(d: any) => d.lat}
         pointLng={(d: any) => d.lng}
         pointAltitude={(d: any) =>
-          isAggregate ? 0.06 + 0.55 * (d.value / maxValue) : d.selected ? 0.12 : 0.04
+          isAggregate ? 0.05 + 0.5 * (d.value / maxValue) : d.selected ? 0.16 : 0.085
         }
         pointRadius={(d: any) =>
-          isAggregate ? 0.45 + 0.7 * (d.value / maxValue) : d.selected ? 0.6 : 0.35
+          isAggregate ? 0.34 + 0.55 * (d.value / maxValue) : d.selected ? 0.42 : 0.28
         }
         pointColor={(d: any) =>
-          d.kind === "company" ? STAGE_COLORS[d.company.stage as Stage] : d.selected ? "#a5b4fc" : "#818cf8"
+          d.kind === "company"
+            ? rgba(repColor(d.company.ownerRep), d.selected ? 0.95 : 0.72)
+            : rgba(aggColor, 0.62)
         }
-        pointResolution={6}
-        pointsTransitionDuration={700}
-        onPointClick={(p: any) => handleClick(p as Pt)}
-        pointLabel={(d: any) => labelHtml(d, maxValue)}
-        // pulsing rings under aggregate/selected points
-        ringsData={ringData(points)}
+        pointResolution={10}
+        pointsTransitionDuration={650}
+        onPointClick={handlePointClick}
+        pointLabel={(d: any) => labelHtml(d)}
+        // glow rings: pipeline hot-spots at aggregate, overlap pulses up close
+        ringsData={ringData(points as any[], isAggregate)}
         ringLat={(d: any) => d.lat}
         ringLng={(d: any) => d.lng}
-        ringColor={() => (t: number) => `rgba(129,140,248,${1 - t})`}
-        ringMaxRadius={(d: any) => (isAggregate ? 4 : 2)}
-        ringPropagationSpeed={2}
-        ringRepeatPeriod={1400}
+        ringColor={(d: any) => {
+          const base = d.__overlap ? OVERLAP_COLOR : aggColor;
+          return (t: number) => rgba(base, 1 - t);
+        }}
+        ringMaxRadius={(d: any) => (d.__overlap ? 2.4 : isAggregate ? 4 : 2)}
+        ringPropagationSpeed={(d: any) => (d.__overlap ? 1.6 : 2)}
+        ringRepeatPeriod={(d: any) => (d.__overlap ? 1100 : 1400)}
+        // HTML overlays for overlap badges + selected label
+        htmlElementsData={htmlData}
+        htmlLat={(d: any) => d.lat}
+        htmlLng={(d: any) => d.lng}
+        htmlAltitude={(d: any) => (d.type === "label" ? 0.22 : 0.14)}
+        htmlElement={(d: any) => makeHtml(d)}
       />
 
-      <Legend isCompany={drill === "city" || drill === "company"} />
+      {isAggregate ? <ValueHint /> : <RepLegend />}
     </div>
   );
 }
 
-// Only show pulse rings for the strongest few points to keep it clean.
-function ringData(points: Pt[]) {
-  const top = [...points].sort((a, b) => b.value - a.value).slice(0, 6);
-  return top as object[];
+// Rings: top pipeline points when zoomed out; overlap accounts when zoomed in.
+function ringData(points: any[], isAggregate: boolean) {
+  if (isAggregate) {
+    return [...points].sort((a, b) => b.value - a.value).slice(0, 6) as object[];
+  }
+  return points.filter((p) => p.overlap).map((p) => ({ ...p, __overlap: true })) as object[];
 }
 
-function labelHtml(d: any, max: number): string {
+function makeHtml(d: any): HTMLElement {
+  if (d.type === "label") {
+    const el = document.createElement("div");
+    el.style.cssText =
+      "transform:translate(-50%,-160%);font-family:Inter,sans-serif;font-size:12px;font-weight:600;color:#fff;background:rgba(15,17,23,0.85);border:1px solid rgba(255,255,255,0.12);padding:3px 8px;border-radius:8px;white-space:nowrap;backdrop-filter:blur(6px);box-shadow:0 6px 24px rgba(0,0,0,0.5)";
+    el.textContent = d.text;
+    return el;
+  }
+  // overlap badge with both rep colors + warning
+  const el = document.createElement("div");
+  el.style.cssText =
+    "transform:translate(-50%,-50%);display:flex;align-items:center;gap:5px;font-family:Inter,sans-serif;font-size:11px;font-weight:700;color:#0b0d12;background:" +
+    OVERLAP_COLOR +
+    ";padding:3px 7px;border-radius:999px;white-space:nowrap;box-shadow:0 0 16px -2px " +
+    OVERLAP_COLOR +
+    ";animation:pulseGlow 2s ease-in-out infinite";
+  const dots = (d.reps as string[])
+    .map(
+      (r) =>
+        `<span style="width:8px;height:8px;border-radius:999px;display:inline-block;background:${repColor(
+          r
+        )};box-shadow:0 0 4px ${repColor(r)}"></span>`
+    )
+    .join("");
+  el.innerHTML = `<span style="display:flex;gap:3px">${dots}</span><span>${d.reps.length} reps</span>`;
+  return el;
+}
+
+function labelHtml(d: any): string {
+  const box = (title: string, lines: string[]) =>
+    `<div style="font-family:Inter,sans-serif;background:rgba(15,17,23,0.92);border:1px solid rgba(255,255,255,0.1);padding:8px 10px;border-radius:10px;color:#e2e8f0;font-size:12px;backdrop-filter:blur(8px);box-shadow:0 8px 30px rgba(0,0,0,0.5)">
+      <div style="font-weight:600;color:#fff">${title}</div>${lines
+        .map((l) => `<div style="color:#94a3b8">${l}</div>`)
+        .join("")}</div>`;
   if (d.kind === "company") {
     const c: Company = d.company;
-    return `<div style="font-family:Inter,sans-serif;background:rgba(15,17,23,0.92);border:1px solid rgba(255,255,255,0.1);
-      padding:8px 10px;border-radius:10px;color:#e2e8f0;font-size:12px;backdrop-filter:blur(8px);box-shadow:0 8px 30px rgba(0,0,0,0.5)">
-      <div style="font-weight:600;color:#fff">${c.name}</div>
-      <div style="color:#94a3b8">${c.stage} · ${fmtMoney(c.dealValue)}</div>
-      <div style="color:#64748b;font-size:11px">${c.ownerRep}</div></div>`;
+    return box(c.name, [`${c.stage} · ${fmtMoney(c.dealValue)}`, `${c.ownerRep}${d.overlap ? " · ⚠ overlap" : ""}`]);
   }
   const title = d.kind === "country" ? d.country : d.city;
-  const sub = d.kind === "country" ? "Click to drill into cities" : "Click to see accounts";
-  return `<div style="font-family:Inter,sans-serif;background:rgba(15,17,23,0.92);border:1px solid rgba(255,255,255,0.1);
-    padding:8px 10px;border-radius:10px;color:#e2e8f0;font-size:12px;backdrop-filter:blur(8px);box-shadow:0 8px 30px rgba(0,0,0,0.5)">
-    <div style="font-weight:600;color:#fff">${title}</div>
-    <div style="color:#a5b4fc">${fmtMoney(d.value)} · ${d.count} deal${d.count > 1 ? "s" : ""}</div>
-    <div style="color:#64748b;font-size:11px">${sub}</div></div>`;
+  return box(title, [`${fmtMoney(d.value)} · ${d.dealCount} deals`, d.kind === "country" ? "Click to drill into cities" : "Click to see accounts"]);
 }
 
-function Legend({ isCompany }: { isCompany: boolean }) {
-  if (!isCompany) {
-    return (
-      <div className="pointer-events-none absolute bottom-4 right-4 rounded-xl glass px-3 py-2 text-[11px] text-slate-400 shadow-card">
-        <span className="text-accent-soft">●</span> sized & lit by pipeline value · click to fly in
-      </div>
-    );
-  }
+function ValueHint() {
   return (
-    <div className="pointer-events-none absolute bottom-4 right-4 flex flex-wrap gap-x-3 gap-y-1 rounded-xl glass px-3 py-2 text-[11px] text-slate-400 shadow-card">
-      {Object.entries(STAGE_COLORS).map(([s, c]) => (
-        <span key={s} className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c }} />
-          {s}
+    <div className="pointer-events-none absolute bottom-4 right-4 rounded-xl glass px-3 py-2 text-[11px] text-slate-400 shadow-card">
+      <span className="text-accent-soft">●</span> beam height &amp; glow = pipeline value · click to fly in
+    </div>
+  );
+}
+
+function RepLegend() {
+  return (
+    <div className="pointer-events-none absolute bottom-4 right-4 rounded-xl glass px-3 py-2.5 shadow-card">
+      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+        Reps
+      </div>
+      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 sm:gap-x-4">
+        {REPS.map((r) => (
+          <span key={r} className="flex items-center gap-1.5 text-[11px] text-slate-300">
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: REP_COLORS[r], boxShadow: `0 0 6px ${REP_COLORS[r]}` }}
+            />
+            {r.split(" ")[0]}
+          </span>
+        ))}
+        <span className="flex items-center gap-1.5 text-[11px] text-amber-300">
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-400" style={{ boxShadow: `0 0 6px ${OVERLAP_COLOR}` }} />
+          Overlap
         </span>
-      ))}
+      </div>
     </div>
   );
 }

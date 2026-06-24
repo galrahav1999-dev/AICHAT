@@ -31,10 +31,24 @@ export const STAGE_COLORS: Record<Stage, string> = {
 };
 
 export const REP_COLORS: Record<string, string> = {};
-const REP_PALETTE = ["#6366f1", "#ec4899", "#14b8a6", "#f97316", "#a855f7"];
+// Distinct, vivid, consistent colors — the "whose book is this" language.
+// Order of REPS: Maya, Diego, Priya, Tom, Sora.
+const REP_PALETTE = ["#6366f1", "#fb7185", "#2dd4bf", "#38bdf8", "#c084fc"];
 REPS.forEach((rep, i) => {
   REP_COLORS[rep] = REP_PALETTE[i % REP_PALETTE.length];
 });
+
+export const repColor = (rep: string) => REP_COLORS[rep] ?? "#6366f1";
+
+// Warning color for account overlaps — kept clear of every rep color.
+export const OVERLAP_COLOR = "#fbbf24";
+
+// hex -> rgba string helper for translucent neon.
+export function rgba(hex: string, a: number): string {
+  const h = hex.replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
 
 export function fmtMoney(v: number): string {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;

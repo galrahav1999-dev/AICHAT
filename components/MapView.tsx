@@ -120,7 +120,10 @@ export default function MapView() {
         </div>
 
         <style jsx global>{`
-          .cockpit-marker {
+          /* Outer element is positioned by MapLibre (transform); never set
+             transform here or markers drift on zoom. Scale the inner dot. */
+          .cockpit-marker { width: 16px; height: 16px; }
+          .cockpit-dot {
             width: 16px;
             height: 16px;
             border-radius: 999px;
@@ -128,12 +131,12 @@ export default function MapView() {
             box-shadow: 0 0 0 2px rgba(8, 9, 13, 0.9), 0 0 14px 2px var(--c);
             transition: transform 0.15s ease;
           }
-          .cockpit-marker:hover { transform: scale(1.35); }
-          .cockpit-marker.is-selected {
+          .cockpit-dot:hover { transform: scale(1.35); }
+          .cockpit-marker.is-selected .cockpit-dot {
             transform: scale(1.5);
             box-shadow: 0 0 0 3px #fff, 0 0 18px 4px var(--c);
           }
-          .cockpit-marker.is-overlap::after {
+          .cockpit-marker.is-overlap .cockpit-dot::after {
             content: "";
             position: absolute;
             inset: -5px;
@@ -161,9 +164,12 @@ function makeMarkerEl(c: Company, overlap: boolean): HTMLDivElement {
   const el = document.createElement("div");
   el.className = `cockpit-marker${overlap ? " is-overlap" : ""}`;
   const color = repColor(c.ownerRep);
-  el.style.setProperty("--c", color);
-  el.style.background = color;
-  el.style.position = "relative";
+  const dot = document.createElement("div");
+  dot.className = "cockpit-dot";
+  dot.style.position = "relative";
+  dot.style.setProperty("--c", color);
+  dot.style.background = color;
+  el.appendChild(dot);
   return el;
 }
 

@@ -20,20 +20,33 @@ import {
 } from "@/lib/data";
 import type { Company } from "@/lib/types";
 
-const ATLAS = "https://unpkg.com/world-atlas@2/countries-110m.json";
+const NIGHT = "//unpkg.com/three-globe/example/img/earth-night.jpg";
+const BUMP = "//unpkg.com/three-globe/example/img/earth-topology.png";
+const STARS = "//unpkg.com/three-globe/example/img/night-sky.png";
 
-// Altitude (camera distance) per drill level — smaller = closer in.
 const ALT = { globe: 2.5, country: 1.15, city: 0.5, street: 0.62, company: 0.26 } as const;
 const FLY_MS = 1500;
 const norm = (s: string) => s.trim().toLowerCase();
 
-// Minimalist deep-navy globe so neon beams + countries pop on the white vortex.
-const globeMaterial = new THREE.MeshPhongMaterial({
-  color: "#0a0e1c",
-  emissive: "#0a0f22",
-  emissiveIntensity: 0.6,
-  shininess: 6,
-});
+// Neutral neon for whole-team aggregate beams (rep colors used when filtered).
+const NEON = "#38e8ff";
+
+// Shared soft-glow sprite texture (radial gradient) for the neon beam tips.
+let GLOW_TEX: THREE.Texture | null = null;
+function glowTexture() {
+  if (GLOW_TEX) return GLOW_TEX;
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const ctx = c.getContext("2d")!;
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.25, "rgba(255,255,255,0.7)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  GLOW_TEX = new THREE.CanvasTexture(c);
+  return GLOW_TEX;
+}
 
 export default function GlobeView() {
   const globeRef = useRef<any>(null);
@@ -54,19 +67,19 @@ export default function GlobeView() {
   const drillToCountry = useCockpit((s) => s.drillToCountry);
   const drillToCity = useCockpit((s) => s.drillToCity);
   const selectCompany = useCockpit((s) => s.selectCompany);
+  const drillUp = useCockpit((s) => s.drillUp);
 
   const selectRef = useRef(selectCompany);
   selectRef.current = selectCompany;
 
   const isAggregate = drill === "globe" || drill === "country";
-
-  // Countries that have pipeline (for territory coloring).
+  const aggColor = repFilter !== "all" ? repColor(repFilter) : NEON;
   const dealCountries = useMemo(() => new Set(visible.map((c) => c.country)), [visible]);
 
   // --- Load country shapes once (browser fetch; globe works without them) ---
   useEffect(() => {
     let alive = true;
-    fetch(ATLAS)
+    fetch("https://unpkg.com/world-atlas@2/countries-110m.json")
       .then((r) => r.json())
       .then((topo) => {
         const fc: any = feature(topo, topo.objects.countries);
@@ -78,7 +91,6 @@ export default function GlobeView() {
     };
   }, []);
 
-  // --- Responsive sizing ---
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -111,6 +123,10 @@ export default function GlobeView() {
 
   const maxValue = useMemo(() => Math.max(1, ...points.map((p: any) => p.value || 0)), [points]);
 
+  // beam tip altitude (kept in sync with pointAltitude below)
+  const tipAlt = (d: any) => (isAggregate ? 0.05 + 0.5 * (d.value / maxValue) : d.selected ? 0.18 : 0.1);
+  const beamColor = (d: any) => (d.kind === "company" ? repColor(d.company.ownerRep) : aggColor);
+
   // --- HTML overlays: overlap badges + selected name label ---
   const htmlData = useMemo(() => {
     if (isAggregate) return [] as any[];
@@ -130,7 +146,7 @@ export default function GlobeView() {
     return [...badges, ...label];
   }, [isAggregate, visible, selectedCountry, selectedCity, selectedCompanyId, overlaps]);
 
-  // --- Camera flights (state-driven; reused by back, filters, panel, polygons) ---
+  // --- Camera flights ---
   useEffect(() => {
     const g = globeRef.current;
     if (!g) return;
@@ -155,7 +171,6 @@ export default function GlobeView() {
     };
   }, [drill, selectedCountry, selectedCity, selectedCompanyId]);
 
-  // --- Auto-rotate only at the world level (drilling "locks" the view) ---
   useEffect(() => {
     const g = globeRef.current;
     if (!g) return;
@@ -182,49 +197,61 @@ export default function GlobeView() {
     else if (pt.kind === "city") drillToCity(pt.country, pt.city);
     else selectRef.current(pt.company);
   }
-
   function handlePolyClick(p: any) {
     const country = POLY_NAME_TO_COUNTRY[p?.properties?.name];
     if (country && dealCountries.has(country)) drillToCountry(country);
   }
 
-  const aggColor = repFilter !== "all" ? repColor(repFilter) : "#7c8cff";
+  // Label for the back button (where you'll land).
+  const backLabel =
+    drill === "company"
+      ? selectedCity ?? "city"
+      : drill === "city"
+      ? selectedCountry ?? "country"
+      : drill === "country"
+      ? "the world"
+      : "";
 
   return (
-    <div ref={wrapRef} className="relative h-full w-full overflow-hidden">
-      {/* White vortex backdrop — shifting purple/blue, slow + minimal */}
-      <div className="vortex pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-1/2 h-[170%] w-[170%] -translate-x-1/2 -translate-y-1/2">
-          <div className="vortex-spin h-full w-full" />
-        </div>
-        <div className="vortex-blob vortex-blob--p" />
-        <div className="vortex-blob vortex-blob--b" />
-      </div>
+    <div ref={wrapRef} className="relative h-full w-full overflow-hidden bg-[#05060c]">
+      {/* Back button — right above the globe, near where the user is */}
+      {drill !== "globe" && (
+        <button
+          onClick={drillUp}
+          className="pointer-events-auto absolute left-1/2 top-4 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink-850/85 px-4 py-2 text-sm font-medium text-white shadow-card ring-1 ring-white/10 backdrop-blur-md transition-all hover:bg-ink-800 hover:ring-white/20"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none">
+            <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Back to {backLabel}
+          <kbd className="ml-1 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">Esc</kbd>
+        </button>
+      )}
 
       <Globe
         ref={globeRef}
         width={size.w}
         height={size.h}
-        backgroundColor="rgba(0,0,0,0)"
-        globeMaterial={globeMaterial}
+        backgroundColor="#05060c"
+        backgroundImageUrl={STARS}
+        globeImageUrl={NIGHT}
+        bumpImageUrl={BUMP}
         showAtmosphere
-        atmosphereColor="#9b8cff"
-        atmosphereAltitude={0.22}
+        atmosphereColor="#6f8bff"
+        atmosphereAltitude={0.2}
         onGlobeReady={() => setReady(true)}
-        // --- Country territories (hover to highlight, click to zoom-lock) ---
+        // --- Country territories (hover highlight, click to zoom-lock) ---
         polygonsData={isAggregate ? polys : []}
-        polygonAltitude={(d: any) => (d === hoverPoly ? 0.06 : 0.012)}
+        polygonAltitude={(d: any) => (d === hoverPoly ? 0.06 : 0.01)}
         polygonCapColor={(d: any) => {
           const country = POLY_NAME_TO_COUNTRY[d?.properties?.name];
-          if (d === hoverPoly) return rgba("#a78bfa", 0.85);
-          if (country && dealCountries.has(country)) return rgba(aggColor, 0.32);
-          return "rgba(120,130,170,0.10)";
+          if (d === hoverPoly) return rgba(aggColor, 0.55);
+          if (country && dealCountries.has(country)) return rgba(aggColor, 0.14);
+          return "rgba(255,255,255,0.015)";
         }}
-        polygonSideColor={() => "rgba(120,110,200,0.12)"}
-        polygonStrokeColor={(d: any) =>
-          d === hoverPoly ? "#c4b5fd" : "rgba(160,170,210,0.25)"
-        }
-        polygonsTransitionDuration={250}
+        polygonSideColor={() => "rgba(120,160,255,0.06)"}
+        polygonStrokeColor={(d: any) => (d === hoverPoly ? rgba(aggColor, 0.9) : "rgba(150,170,220,0.12)")}
+        polygonsTransitionDuration={220}
         onPolygonHover={(p: any) => setHoverPoly(p || null)}
         onPolygonClick={handlePolyClick}
         polygonLabel={(d: any) => territoryLabel(d, dealCountries)}
@@ -232,35 +259,56 @@ export default function GlobeView() {
         pointsData={points as object[]}
         pointLat={(d: any) => d.lat}
         pointLng={(d: any) => d.lng}
-        pointAltitude={(d: any) => (isAggregate ? 0.05 + 0.45 * (d.value / maxValue) : d.selected ? 0.16 : 0.085)}
-        pointRadius={(d: any) => (isAggregate ? 0.3 + 0.4 * (d.value / maxValue) : d.selected ? 0.4 : 0.26)}
-        pointColor={(d: any) =>
-          d.kind === "company" ? rgba(repColor(d.company.ownerRep), d.selected ? 1 : 0.92) : rgba(aggColor, 0.9)
-        }
-        pointResolution={12}
-        pointsTransitionDuration={600}
+        pointAltitude={tipAlt}
+        pointRadius={(d: any) => (isAggregate ? 0.12 + 0.12 * (d.value / maxValue) : d.selected ? 0.16 : 0.1)}
+        pointColor={beamColor}
+        pointResolution={16}
+        pointsTransitionDuration={500}
         onPointClick={handlePointClick}
         pointLabel={(d: any) => beamLabel(d)}
-        // --- Glow rings: pipeline hot-spots / overlap pulses ---
-        ringsData={ringData(points as any[], isAggregate)}
+        // --- Additive glow at each beam tip (the "neon") ---
+        customLayerData={points as object[]}
+        customThreeObject={(d: any) => {
+          const mat = new THREE.SpriteMaterial({
+            map: glowTexture(),
+            color: new THREE.Color(beamColor(d)),
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+            depthWrite: false,
+            opacity: 0.9,
+          });
+          const sprite = new THREE.Sprite(mat);
+          sprite.raycast = () => {}; // never intercept beam/polygon clicks
+          return sprite;
+        }}
+        customThreeObjectUpdate={(obj: any, d: any) => {
+          const g = globeRef.current;
+          if (!g || typeof g.getCoords !== "function") return;
+          const { x, y, z } = g.getCoords(d.lat, d.lng, tipAlt(d));
+          obj.position.set(x, y, z);
+          (obj.material as THREE.SpriteMaterial).color.set(beamColor(d));
+          const s = isAggregate ? 7 + 12 * (d.value / maxValue) : d.selected ? 9 : 5;
+          obj.scale.set(s, s, 1);
+        }}
+        // --- Glow rings ---
+        ringsData={ringData(points as any[])}
         ringLat={(d: any) => d.lat}
         ringLng={(d: any) => d.lng}
         ringColor={(d: any) => {
-          const base = d.__overlap ? OVERLAP_COLOR : aggColor;
+          const base = d.__overlap ? OVERLAP_COLOR : beamColor(d);
           return (t: number) => rgba(base, 1 - t);
         }}
-        ringMaxRadius={(d: any) => (d.__overlap ? 2.4 : isAggregate ? 3.4 : 1.8)}
-        ringPropagationSpeed={(d: any) => (d.__overlap ? 1.6 : 1.8)}
+        ringMaxRadius={(d: any) => (d.__overlap ? 2.4 : isAggregate ? 3 : 1.6)}
+        ringPropagationSpeed={(d: any) => (d.__overlap ? 1.6 : 1.6)}
         ringRepeatPeriod={(d: any) => (d.__overlap ? 1100 : 1500)}
         // --- HTML overlays ---
         htmlElementsData={htmlData}
         htmlLat={(d: any) => d.lat}
         htmlLng={(d: any) => d.lng}
-        htmlAltitude={(d: any) => (d.type === "label" ? 0.22 : 0.14)}
+        htmlAltitude={(d: any) => (d.type === "label" ? 0.24 : 0.16)}
         htmlElement={(d: any) => makeHtml(d)}
       />
 
-      {/* Hovered territory name (bottom-center, elegant) */}
       {isAggregate && hoverPoly && (
         <div className="pointer-events-none absolute bottom-20 left-1/2 -translate-x-1/2 rounded-full bg-ink-900/80 px-4 py-1.5 text-sm font-medium text-white shadow-card backdrop-blur-md">
           {hoverPoly.properties.name}
@@ -280,9 +328,10 @@ export default function GlobeView() {
   );
 }
 
-function ringData(points: any[], isAggregate: boolean) {
-  if (isAggregate) return [...points].sort((a, b) => b.value - a.value).slice(0, 6) as object[];
-  return points.filter((p) => p.overlap).map((p) => ({ ...p, __overlap: true })) as object[];
+function ringData(points: any[]) {
+  const overlaps = points.filter((p) => p.overlap).map((p) => ({ ...p, __overlap: true }));
+  const base = [...points].sort((a, b) => b.value - a.value).slice(0, 8);
+  return [...base, ...overlaps] as object[];
 }
 
 function makeHtml(d: any): HTMLElement {
@@ -311,7 +360,6 @@ function box(title: string, lines: string[]) {
   return `<div style="font-family:Inter,sans-serif;background:rgba(15,17,23,0.92);border:1px solid rgba(255,255,255,0.1);padding:8px 10px;border-radius:10px;color:#e2e8f0;font-size:12px;backdrop-filter:blur(8px);box-shadow:0 8px 30px rgba(0,0,0,0.5)">
     <div style="font-weight:600;color:#fff">${title}</div>${lines.map((l) => `<div style="color:#94a3b8">${l}</div>`).join("")}</div>`;
 }
-
 function beamLabel(d: any): string {
   if (d.kind === "company") {
     const c: Company = d.company;
@@ -320,7 +368,6 @@ function beamLabel(d: any): string {
   const title = d.kind === "country" ? d.country : d.city;
   return box(title, [`${fmtMoney(d.value)} · ${d.count} deals`, d.kind === "country" ? "Click to drill into cities" : "Click to see accounts"]);
 }
-
 function territoryLabel(d: any, dealCountries: Set<string>): string {
   const country = POLY_NAME_TO_COUNTRY[d?.properties?.name];
   const has = country && dealCountries.has(country);
@@ -330,11 +377,10 @@ function territoryLabel(d: any, dealCountries: Set<string>): string {
 function ValueHint() {
   return (
     <div className="pointer-events-none absolute bottom-4 right-4 rounded-xl glass px-3 py-2 text-[11px] text-slate-300 shadow-card">
-      <span className="text-accent-soft">●</span> beam height = pipeline value · hover a country, click to zoom
+      <span style={{ color: NEON }}>●</span> beam height = pipeline value · hover a country, click to zoom
     </div>
   );
 }
-
 function RepLegend() {
   return (
     <div className="pointer-events-none absolute bottom-4 right-4 rounded-xl glass px-3 py-2.5 shadow-card">

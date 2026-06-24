@@ -8,6 +8,7 @@ import ListBoardView from "@/components/ListBoardView";
 import AccountDetailCard from "@/components/AccountDetailCard";
 import AutomationPanel from "@/components/AutomationPanel";
 import OverlapAlert from "@/components/OverlapAlert";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { ViewSkeleton } from "@/components/Skeletons";
 import { useCockpit } from "@/lib/store";
 
@@ -37,11 +38,15 @@ export default function Page() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       const el = document.activeElement as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) {
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")) {
         el.blur();
         return;
       }
-      escapeOut();
+      try {
+        escapeOut();
+      } catch {
+        /* never let a keypress break the app */
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -57,9 +62,11 @@ export default function Page() {
         ) : (
           <>
             <div className="absolute inset-0">
-              {view === "globe" && <GlobeView />}
-              {view === "map" && <MapView />}
-              {view === "list" && <ListBoardView />}
+              <ErrorBoundary key={view}>
+                {view === "globe" && <GlobeView />}
+                {view === "map" && <MapView />}
+                {view === "list" && <ListBoardView />}
+              </ErrorBoundary>
             </div>
 
             {/* Globe gets the location nav + rep pills + overlap CTA overlays */}

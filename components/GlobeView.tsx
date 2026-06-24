@@ -285,7 +285,7 @@ export default function GlobeView() {
         pointLng={(d: any) => d.lng}
         pointAltitude={tipAlt}
         pointRadius={(d: any) =>
-          beamLevel ? 0.12 + 0.12 * (d.value / maxValue) : d.kind === "company" ? (d.selected ? 0.5 : 0.34) : 0.42
+          beamLevel ? 0.12 + 0.12 * (d.value / maxValue) : d.kind === "company" ? (d.selected ? 0.62 : 0.46) : 0.58
         }
         pointColor={beamColor}
         pointResolution={16}
@@ -313,7 +313,7 @@ export default function GlobeView() {
           const { x, y, z } = g.getCoords(d.lat, d.lng, tipAlt(d));
           obj.position.set(x, y, z);
           (obj.material as THREE.SpriteMaterial).color.set(beamColor(d));
-          const s = beamLevel ? 7 + 12 * (d.value / maxValue) : d.kind === "company" ? (d.selected ? 11 : 7) : 12;
+          const s = beamLevel ? 7 + 12 * (d.value / maxValue) : d.kind === "company" ? (d.selected ? 14 : 10) : 15;
           obj.scale.set(s, s, 1);
         }}
         // --- Glow rings ---

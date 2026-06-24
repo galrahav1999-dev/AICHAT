@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import FilterBar from "@/components/FilterBar";
+import DrillPanel from "@/components/DrillPanel";
 import ListBoardView from "@/components/ListBoardView";
 import CompanyCardReveal from "@/components/CompanyCardReveal";
 import AutomationPanel from "@/components/AutomationPanel";
@@ -74,6 +75,7 @@ export default function Page() {
             {view === "globe" && (
               <>
                 <FilterBar />
+                <DrillPanel />
                 <OverlapAlert />
               </>
             )}

@@ -56,6 +56,7 @@ export default function GlobeView() {
   const [ready, setReady] = useState(false);
   const [polys, setPolys] = useState<any[]>([]);
   const [hoverPoly, setHoverPoly] = useState<any>(null);
+  const [hoverPt, setHoverPt] = useState<any>(null);
 
   const { visible, overlaps } = useFiltered();
 
@@ -98,6 +99,12 @@ export default function GlobeView() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Clear hover state when changing levels so nothing stays "stuck" highlighted.
+  useEffect(() => {
+    setHoverPt(null);
+    setHoverPoly(null);
+  }, [drill, selectedCountry, selectedCity]);
 
   // --- Point/beam data (value/count normalized so sizes never NaN) ---
   const points = useMemo(() => {
@@ -264,8 +271,9 @@ export default function GlobeView() {
         atmosphereColor="#6f8bff"
         atmosphereAltitude={0.2}
         onGlobeReady={() => setReady(true)}
-        // --- Country territories (hover highlight, click to zoom-lock) ---
-        polygonsData={isAggregate ? polys : []}
+        // --- Country territories: ONLY at the world level (hover highlight,
+        //     click to zoom-lock). Once drilled in they'd block the dots. ---
+        polygonsData={drill === "globe" ? polys : []}
         polygonAltitude={(d: any) => (d === hoverPoly ? 0.06 : 0.01)}
         polygonCapColor={(d: any) => {
           const country = POLY_NAME_TO_COUNTRY[d?.properties?.name];
@@ -283,14 +291,16 @@ export default function GlobeView() {
         pointsData={points as object[]}
         pointLat={(d: any) => d.lat}
         pointLng={(d: any) => d.lng}
-        pointAltitude={tipAlt}
-        pointRadius={(d: any) =>
-          beamLevel ? 0.12 + 0.12 * (d.value / maxValue) : d.kind === "company" ? (d.selected ? 0.62 : 0.46) : 0.58
-        }
+        pointAltitude={(d: any) => (d === hoverPt && !beamLevel ? tipAlt(d) + 0.02 : tipAlt(d))}
+        pointRadius={(d: any) => {
+          const base = beamLevel ? 0.12 + 0.12 * (d.value / maxValue) : d.kind === "company" ? (d.selected ? 0.62 : 0.46) : 0.58;
+          return d === hoverPt ? base * 1.6 : base; // expand on hover
+        }}
         pointColor={beamColor}
         pointResolution={16}
-        pointsTransitionDuration={500}
+        pointsTransitionDuration={180}
         onPointClick={handlePointClick}
+        onPointHover={(p: any) => setHoverPt(p || null)}
         pointLabel={(d: any) => beamLabel(d)}
         // --- Additive glow at each beam tip (the "neon") ---
         customLayerData={points as object[]}
@@ -335,7 +345,7 @@ export default function GlobeView() {
         htmlElement={(d: any) => makeHtml(d)}
       />
 
-      {isAggregate && hoverPoly && (
+      {drill === "globe" && hoverPoly && (
         <div className="pointer-events-none absolute bottom-20 left-1/2 -translate-x-1/2 rounded-full bg-ink-900/80 px-4 py-1.5 text-sm font-medium text-white shadow-card backdrop-blur-md">
           {hoverPoly.properties.name}
           {(() => {

@@ -35,6 +35,7 @@ interface CockpitState {
   selectedCountry: string | null;
   selectedCity: string | null;
   selectedCompanyId: string | null;
+  repView: string | null; // when set, show that rep's full account book
 
   // --- Filters ---
   repFilter: string; // "all" or a rep name
@@ -94,6 +95,8 @@ interface CockpitState {
   drillUp: () => void;
   selectCompany: (company: Company) => void;
   focusCompany: (companyId: string) => void;
+  openRepView: (rep: string) => void;
+  closeRepView: () => void;
   clearSelection: () => void;
 
   editDraft: (companyId: string, patch: Partial<Pick<Draft, "subject" | "body">>) => void;
@@ -111,6 +114,7 @@ export const useCockpit = create<CockpitState>((set) => ({
   selectedCountry: null,
   selectedCity: null,
   selectedCompanyId: null,
+  repView: null,
 
   repFilter: "all",
   overlapsOnly: false,
@@ -187,7 +191,10 @@ export const useCockpit = create<CockpitState>((set) => ({
   escapeOut: () =>
     set((s) => {
       if (s.panelOpen) return { panelOpen: false };
+      if (s.metricsOpen) return { metricsOpen: false };
+      // Close the account dossier first (returns to the rep book if it's open).
       if (s.drill === "company") return { drill: "city", selectedCompanyId: null };
+      if (s.repView) return { repView: null };
       if (s.drill === "city") return { drill: "country", selectedCity: null };
       if (s.drill === "country")
         return { drill: "globe", selectedCountry: null, selectedCity: null, selectedCompanyId: null };
@@ -254,6 +261,9 @@ export const useCockpit = create<CockpitState>((set) => ({
     });
   },
   clearSelection: () => set({ selectedCompanyId: null, drill: "city" }),
+  // Open a rep's full book of business (a table you can toggle between).
+  openRepView: (rep) => set({ repView: rep, selectedCompanyId: null, drill: "city" }),
+  closeRepView: () => set({ repView: null }),
 
   editDraft: (companyId, patch) =>
     set((s) => ({

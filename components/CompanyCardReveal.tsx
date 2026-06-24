@@ -56,6 +56,7 @@ export default function CompanyCardReveal() {
   const stageOverrides = useCockpit((s) => s.stageOverrides);
   const drillUp = useCockpit((s) => s.drillUp);
   const togglePanel = useCockpit((s) => s.togglePanel);
+  const openRepView = useCockpit((s) => s.openRepView);
 
   const overlaps = useMemo(() => overlappingNames(), []);
   const base = (selectedId ? companies.find((c) => c.id === selectedId) : null) ?? null;
@@ -100,7 +101,7 @@ export default function CompanyCardReveal() {
   const overdue = (daysFromToday(company.nextFollowUp) ?? 1) <= 0 && company.nextFollowUp;
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="absolute inset-0 animate-fade-in bg-black/70 backdrop-blur-md" onClick={drillUp} />
 
       <div
@@ -136,13 +137,20 @@ export default function CompanyCardReveal() {
             <span className={`chip ring-1 ${statusChip(statusOf(company))}`}>{statusOf(company)}</span>
           </div>
 
-          <div className="mt-auto flex w-full items-center gap-2 rounded-xl bg-white/5 p-2.5">
+          <button
+            onClick={() => openRepView(company.ownerRep)}
+            className="group mt-auto flex w-full items-center gap-2 rounded-xl bg-white/5 p-2.5 text-left transition-colors hover:bg-white/10"
+            title={`View ${company.ownerRep}'s full book`}
+          >
             <RepAvatar rep={company.ownerRep} size={30} />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-white">{company.ownerRep}</div>
-              <div className="text-[11px] text-slate-500">Account owner</div>
+              <div className="text-[11px] text-slate-500">Account owner · view book</div>
             </div>
-          </div>
+            <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-500 transition-transform group-hover:translate-x-0.5" fill="none">
+              <path d="m9 6 6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
           {isOverlap && (
             <span className="chip animate-pulse-glow bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/40">
               <WarnIcon className="h-3 w-3" /> Shared with {otherReps.join(", ")}

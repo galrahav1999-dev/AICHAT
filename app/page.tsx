@@ -5,8 +5,9 @@ import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import FilterBar from "@/components/FilterBar";
 import ListBoardView from "@/components/ListBoardView";
-import AccountDetailCard from "@/components/AccountDetailCard";
+import CompanyCardReveal from "@/components/CompanyCardReveal";
 import AutomationPanel from "@/components/AutomationPanel";
+import MetricsPanel from "@/components/MetricsPanel";
 import OverlapAlert from "@/components/OverlapAlert";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { ViewSkeleton } from "@/components/Skeletons";
@@ -77,12 +78,13 @@ export default function Page() {
               </>
             )}
 
-            {/* Selecting an account anywhere surfaces its card everywhere */}
-            <AccountDetailCard />
+            {/* Selecting an account anywhere reveals its company card */}
+            <CompanyCardReveal />
           </>
         )}
 
         <AutomationPanel />
+        <MetricsPanel />
       </main>
     </div>
   );

@@ -58,6 +58,9 @@ interface CockpitState {
   drafts: Record<string, Draft>;
   panelOpen: boolean;
 
+  // --- Team metrics drawer ---
+  metricsOpen: boolean;
+
   // --- Board drag-and-drop (local stage moves) ---
   stageOverrides: Record<string, Stage>;
 
@@ -73,6 +76,7 @@ interface CockpitState {
   resetFilters: () => void;
   setCrm: (c: CrmOption) => void;
   togglePanel: (open?: boolean) => void;
+  toggleMetrics: (open?: boolean) => void;
   toggleSound: (on?: boolean) => void;
   moveStage: (companyId: string, stage: Stage) => void;
   escapeOut: () => void;
@@ -124,6 +128,7 @@ export const useCockpit = create<CockpitState>((set) => ({
 
   drafts: initialDrafts,
   panelOpen: false,
+  metricsOpen: false,
 
   stageOverrides: {},
   soundOn: false,
@@ -211,6 +216,7 @@ export const useCockpit = create<CockpitState>((set) => ({
     })),
   setCrm: (crm) => set({ crm }),
   togglePanel: (open) => set((s) => ({ panelOpen: open ?? !s.panelOpen })),
+  toggleMetrics: (open) => set((s) => ({ metricsOpen: open ?? !s.metricsOpen })),
   toggleSound: (on) => set((s) => ({ soundOn: on ?? !s.soundOn })),
   moveStage: (companyId, stage) =>
     set((s) => ({ stageOverrides: { ...s.stageOverrides, [companyId]: stage } })),

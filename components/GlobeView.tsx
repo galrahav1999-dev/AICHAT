@@ -101,13 +101,35 @@ export default function GlobeView() {
 
   // --- Point/beam data (value/count normalized so sizes never NaN) ---
   const points = useMemo(() => {
+    const dominantRep = (list: Company[]) => {
+      const by: Record<string, number> = {};
+      for (const c of list) by[c.ownerRep] = (by[c.ownerRep] ?? 0) + c.dealValue;
+      return Object.entries(by).sort((a, b) => b[1] - a[1])[0]?.[0] ?? REPS[0];
+    };
     if (drill === "globe") {
       const aggs = aggregateByCountry(visible);
-      return aggs.map((a) => ({ kind: "country", country: a.country, lat: a.lat, lng: a.lng, value: a.totalValue, count: a.dealCount }));
+      return aggs.map((a) => ({
+        kind: "country",
+        country: a.country,
+        lat: a.lat,
+        lng: a.lng,
+        value: a.totalValue,
+        count: a.dealCount,
+        rep: dominantRep(visible.filter((c) => c.country === a.country)),
+      }));
     }
     if (drill === "country" && selectedCountry) {
       const aggs = aggregateByCity(visible, selectedCountry);
-      return aggs.map((a) => ({ kind: "city", country: a.country, city: a.city, lat: a.lat, lng: a.lng, value: a.totalValue, count: a.dealCount }));
+      return aggs.map((a) => ({
+        kind: "city",
+        country: a.country,
+        city: a.city,
+        lat: a.lat,
+        lng: a.lng,
+        value: a.totalValue,
+        count: a.dealCount,
+        rep: dominantRep(visible.filter((c) => c.country === a.country && c.city === a.city)),
+      }));
     }
     const list = visible.filter((c) => c.country === selectedCountry && c.city === selectedCity);
     return list.map((c) => ({
@@ -123,9 +145,11 @@ export default function GlobeView() {
 
   const maxValue = useMemo(() => Math.max(1, ...points.map((p: any) => p.value || 0)), [points]);
 
-  // beam tip altitude (kept in sync with pointAltitude below)
-  const tipAlt = (d: any) => (isAggregate ? 0.05 + 0.5 * (d.value / maxValue) : d.selected ? 0.18 : 0.1);
-  const beamColor = (d: any) => (d.kind === "company" ? repColor(d.company.ownerRep) : aggColor);
+  // Tall glowing beams only at the world level; once zoomed into a territory
+  // they flatten into colored dots so they don't hide the map below.
+  const beamLevel = drill === "globe";
+  const tipAlt = (d: any) => (beamLevel ? 0.05 + 0.5 * (d.value / maxValue) : 0.012);
+  const beamColor = (d: any) => repColor(d.kind === "company" ? d.company.ownerRep : d.rep);
 
   // --- HTML overlays: overlap badges + selected name label ---
   const htmlData = useMemo(() => {
@@ -260,7 +284,9 @@ export default function GlobeView() {
         pointLat={(d: any) => d.lat}
         pointLng={(d: any) => d.lng}
         pointAltitude={tipAlt}
-        pointRadius={(d: any) => (isAggregate ? 0.12 + 0.12 * (d.value / maxValue) : d.selected ? 0.16 : 0.1)}
+        pointRadius={(d: any) =>
+          beamLevel ? 0.12 + 0.12 * (d.value / maxValue) : d.kind === "company" ? (d.selected ? 0.5 : 0.34) : 0.42
+        }
         pointColor={beamColor}
         pointResolution={16}
         pointsTransitionDuration={500}
@@ -287,7 +313,7 @@ export default function GlobeView() {
           const { x, y, z } = g.getCoords(d.lat, d.lng, tipAlt(d));
           obj.position.set(x, y, z);
           (obj.material as THREE.SpriteMaterial).color.set(beamColor(d));
-          const s = isAggregate ? 7 + 12 * (d.value / maxValue) : d.selected ? 9 : 5;
+          const s = beamLevel ? 7 + 12 * (d.value / maxValue) : d.kind === "company" ? (d.selected ? 11 : 7) : 12;
           obj.scale.set(s, s, 1);
         }}
         // --- Glow rings ---
@@ -323,7 +349,7 @@ export default function GlobeView() {
         </div>
       )}
 
-      {isAggregate ? <ValueHint /> : <RepLegend />}
+      <RepLegend subtitle={beamLevel ? "beam height = pipeline value" : undefined} />
     </div>
   );
 }
@@ -374,17 +400,12 @@ function territoryLabel(d: any, dealCountries: Set<string>): string {
   return box(d?.properties?.name ?? "", [has ? "Has active pipeline" : "No accounts here"]);
 }
 
-function ValueHint() {
-  return (
-    <div className="pointer-events-none absolute bottom-4 right-4 rounded-xl glass px-3 py-2 text-[11px] text-slate-300 shadow-card">
-      <span style={{ color: NEON }}>●</span> beam height = pipeline value · hover a country, click to zoom
-    </div>
-  );
-}
-function RepLegend() {
+function RepLegend({ subtitle }: { subtitle?: string }) {
   return (
     <div className="pointer-events-none absolute bottom-4 right-4 rounded-xl glass px-3 py-2.5 shadow-card">
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Reps</div>
+      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+        Reps {subtitle && <span className="ml-1 normal-case tracking-normal text-slate-500">· {subtitle}</span>}
+      </div>
       <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 sm:gap-x-4">
         {REPS.map((r) => (
           <span key={r} className="flex items-center gap-1.5 text-[11px] text-slate-200">

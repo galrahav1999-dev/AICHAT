@@ -72,6 +72,7 @@ export default function Header() {
 
       <div className="flex-1" />
 
+      <MetricsButton />
       <SoundToggle />
 
       {/* CRM connector (cosmetic) */}
@@ -113,6 +114,22 @@ function OverlapIndicator() {
       <WarnIcon className="h-4 w-4 animate-pulse-glow" />
       <span className="tabular-nums">{count}</span>
       <span className="hidden sm:inline">overlap{count === 1 ? "" : "s"}</span>
+    </button>
+  );
+}
+
+function MetricsButton() {
+  const toggleMetrics = useCockpit((s) => s.toggleMetrics);
+  return (
+    <button
+      onClick={() => toggleMetrics(true)}
+      title="Team metrics"
+      className="btn gap-2 bg-ink-800/80 text-slate-300 ring-1 ring-white/5 hover:text-white hover:ring-white/10"
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4 text-accent-soft" fill="none" aria-hidden>
+        <path d="M4 20V10m6 10V4m6 16v-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+      <span className="hidden lg:inline">Metrics</span>
     </button>
   );
 }

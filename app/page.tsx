@@ -7,6 +7,7 @@ import FilterBar from "@/components/FilterBar";
 import DrillPanel from "@/components/DrillPanel";
 import ListBoardView from "@/components/ListBoardView";
 import CompanyCardReveal from "@/components/CompanyCardReveal";
+import OverlapsView from "@/components/OverlapsView";
 import AutomationPanel from "@/components/AutomationPanel";
 import MetricsPanel from "@/components/MetricsPanel";
 import OverlapAlert from "@/components/OverlapAlert";
@@ -86,6 +87,7 @@ export default function Page() {
           </>
         )}
 
+        <OverlapsView />
         <AutomationPanel />
         <MetricsPanel />
       </main>

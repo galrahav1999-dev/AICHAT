@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Globe from "react-globe.gl";
-import * as THREE from "three";
 import { feature } from "topojson-client";
 import { useCockpit } from "@/lib/store";
 import { useFiltered } from "@/lib/useFiltered";
@@ -32,21 +31,6 @@ const norm = (s: string) => s.trim().toLowerCase();
 const NEON = "#38e8ff";
 
 // Shared soft-glow sprite texture (radial gradient) for the neon beam tips.
-// Built once per GlobeView mount (not a module singleton) so a disposed
-// texture from a previous mount can never be reused.
-function makeGlowTexture() {
-  const c = document.createElement("canvas");
-  c.width = c.height = 64;
-  const ctx = c.getContext("2d")!;
-  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.25, "rgba(255,255,255,0.7)");
-  g.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 64, 64);
-  return new THREE.CanvasTexture(c);
-}
-
 export default function GlobeView() {
   const globeRef = useRef<any>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -75,7 +59,6 @@ export default function GlobeView() {
   const isAggregate = drill === "globe" || drill === "country";
   const aggColor = repFilter !== "all" ? repColor(repFilter) : NEON;
   const dealCountries = useMemo(() => new Set(visible.map((c) => c.country)), [visible]);
-  const glowTex = useMemo(() => makeGlowTexture(), []);
 
   // --- Load country shapes once (browser fetch; globe works without them) ---
   useEffect(() => {
@@ -155,8 +138,8 @@ export default function GlobeView() {
   // Tall glowing beams only at the world level; once zoomed into a territory
   // they flatten into colored dots so they don't hide the map below.
   const beamLevel = drill === "globe";
-  const tipAlt = (d: any) => (beamLevel ? 0.05 + 0.5 * (d.value / maxValue) : 0.012);
-  const beamColor = (d: any) => repColor(d.kind === "company" ? d.company.ownerRep : d.rep);
+  const tipAlt = (d: any) => (beamLevel ? 0.05 + 0.5 * ((d?.value || 0) / maxValue) : 0.012);
+  const beamColor = (d: any) => repColor(d?.kind === "company" ? d?.company?.ownerRep : d?.rep);
 
   // --- HTML overlays: overlap badges + selected name label ---
   const htmlData = useMemo(() => {
@@ -302,40 +285,7 @@ export default function GlobeView() {
         onPointClick={handlePointClick}
         onPointHover={(p: any) => setHoverPt(p || null)}
         pointLabel={(d: any) => beamLabel(d)}
-        // --- Additive glow at each beam tip (the "neon") ---
-        customLayerData={points as object[]}
-        customThreeObject={(d: any) => {
-          try {
-            const mat = new THREE.SpriteMaterial({
-              map: glowTex,
-              color: new THREE.Color(beamColor(d)),
-              blending: THREE.AdditiveBlending,
-              transparent: true,
-              depthWrite: false,
-              opacity: 0.9,
-            });
-            const sprite = new THREE.Sprite(mat);
-            sprite.raycast = () => {}; // never intercept beam/polygon clicks
-            return sprite;
-          } catch {
-            return new THREE.Object3D();
-          }
-        }}
-        customThreeObjectUpdate={(obj: any, d: any) => {
-          try {
-            const g = globeRef.current;
-            if (!g || typeof g.getCoords !== "function" || !obj?.material) return;
-            const coords = g.getCoords(d.lat, d.lng, tipAlt(d));
-            if (!coords) return;
-            obj.position.set(coords.x, coords.y, coords.z);
-            (obj.material as THREE.SpriteMaterial).color.set(beamColor(d));
-            const s = beamLevel ? 7 + 12 * (d.value / maxValue) : d.kind === "company" ? (d.selected ? 14 : 10) : 15;
-            obj.scale.set(s, s, 1);
-          } catch {
-            /* never let a transient three.js state crash the view */
-          }
-        }}
-        // --- Glow rings ---
+        // --- Glow rings (neon halo around every beam/dot) ---
         ringsData={ringData(points as any[])}
         ringLat={(d: any) => d.lat}
         ringLng={(d: any) => d.lng}
@@ -343,9 +293,9 @@ export default function GlobeView() {
           const base = d.__overlap ? OVERLAP_COLOR : beamColor(d);
           return (t: number) => rgba(base, 1 - t);
         }}
-        ringMaxRadius={(d: any) => (d.__overlap ? 2.4 : isAggregate ? 3 : 1.6)}
-        ringPropagationSpeed={(d: any) => (d.__overlap ? 1.6 : 1.6)}
-        ringRepeatPeriod={(d: any) => (d.__overlap ? 1100 : 1500)}
+        ringMaxRadius={(d: any) => (d.__overlap ? 2.6 : isAggregate ? 3 : 1.4)}
+        ringPropagationSpeed={1.6}
+        ringRepeatPeriod={(d: any) => (d.__overlap ? 1100 : 1600)}
         // --- HTML overlays ---
         htmlElementsData={htmlData}
         htmlLat={(d: any) => d.lat}
@@ -374,9 +324,9 @@ export default function GlobeView() {
 }
 
 function ringData(points: any[]) {
+  // A halo ring on every beam/dot, plus an extra amber pulse for overlaps.
   const overlaps = points.filter((p) => p.overlap).map((p) => ({ ...p, __overlap: true }));
-  const base = [...points].sort((a, b) => b.value - a.value).slice(0, 8);
-  return [...base, ...overlaps] as object[];
+  return [...points, ...overlaps] as object[];
 }
 
 function makeHtml(d: any): HTMLElement {

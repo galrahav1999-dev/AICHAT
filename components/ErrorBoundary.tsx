@@ -32,6 +32,11 @@ export default class ErrorBoundary extends React.Component<
             </div>
             <h3 className="text-base font-semibold text-white">This view hit a snag</h3>
             <p className="mt-2 text-sm text-slate-400">It’s only this panel — your data and the rest of the app are fine.</p>
+            {this.state.error?.message && (
+              <pre className="mt-3 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-ink-900/80 p-2 text-left text-[11px] text-rose-300 ring-1 ring-white/5">
+                {this.state.error.message}
+              </pre>
+            )}
             <button onClick={this.reset} className="btn-primary mt-4">
               Reload this view
             </button>

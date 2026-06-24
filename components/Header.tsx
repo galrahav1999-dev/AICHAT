@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useCockpit, pendingCount, type CrmOption } from "@/lib/store";
-import { companies, fmtMoney, isOpen, overlappingNames, OVERLAP_COLOR } from "@/lib/data";
+import { companies, fmtMoney, isOpen, overlappingNames } from "@/lib/data";
 import { SparkIcon, WarnIcon } from "./ui";
 import { startAmbient, stopAmbient } from "@/lib/ambientAudio";
 import type { ViewMode } from "@/lib/types";
@@ -96,20 +96,14 @@ export default function Header() {
 }
 
 function OverlapIndicator() {
-  const overlapsOnly = useCockpit((s) => s.overlapsOnly);
-  const toggleOverlapsOnly = useCockpit((s) => s.toggleOverlapsOnly);
+  const toggleOverlapsView = useCockpit((s) => s.toggleOverlapsView);
   const count = useMemo(() => overlappingNames(companies).size, []);
   if (count === 0) return null;
   return (
     <button
-      onClick={toggleOverlapsOnly}
-      title="Accounts worked by more than one rep"
-      className={`ml-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-all ${
-        overlapsOnly
-          ? "bg-amber-400/25 text-amber-200 ring-1 ring-amber-400/50"
-          : "bg-amber-400/10 text-amber-300 ring-1 ring-amber-400/25 hover:bg-amber-400/20"
-      }`}
-      style={{ boxShadow: overlapsOnly ? `0 0 18px -4px ${OVERLAP_COLOR}` : undefined }}
+      onClick={() => toggleOverlapsView(true)}
+      title="Review accounts worked by more than one rep"
+      className="ml-2 flex items-center gap-1.5 rounded-lg bg-amber-400/10 px-2.5 py-1.5 text-sm font-semibold text-amber-300 ring-1 ring-amber-400/25 transition-all hover:bg-amber-400/20"
     >
       <WarnIcon className="h-4 w-4 animate-pulse-glow" />
       <span className="tabular-nums">{count}</span>

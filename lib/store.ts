@@ -62,6 +62,9 @@ interface CockpitState {
   // --- Team metrics drawer ---
   metricsOpen: boolean;
 
+  // --- Dedicated account-overlap review ---
+  overlapsView: boolean;
+
   // --- Board drag-and-drop (local stage moves) ---
   stageOverrides: Record<string, Stage>;
 
@@ -78,6 +81,7 @@ interface CockpitState {
   setCrm: (c: CrmOption) => void;
   togglePanel: (open?: boolean) => void;
   toggleMetrics: (open?: boolean) => void;
+  toggleOverlapsView: (open?: boolean) => void;
   toggleSound: (on?: boolean) => void;
   moveStage: (companyId: string, stage: Stage) => void;
   escapeOut: () => void;
@@ -134,6 +138,7 @@ export const useCockpit = create<CockpitState>((set) => ({
   drafts: initialDrafts,
   panelOpen: false,
   metricsOpen: false,
+  overlapsView: false,
 
   stageOverrides: {},
   soundOn: false,
@@ -193,6 +198,7 @@ export const useCockpit = create<CockpitState>((set) => ({
     set((s) => {
       if (s.panelOpen) return { panelOpen: false };
       if (s.metricsOpen) return { metricsOpen: false };
+      if (s.overlapsView) return { overlapsView: false };
       // Close the account card (and its rep-book context) first.
       if (s.drill === "company") return { drill: "city", selectedCompanyId: null, repView: null };
       if (s.repView) return { repView: null };
@@ -225,6 +231,7 @@ export const useCockpit = create<CockpitState>((set) => ({
   setCrm: (crm) => set({ crm }),
   togglePanel: (open) => set((s) => ({ panelOpen: open ?? !s.panelOpen })),
   toggleMetrics: (open) => set((s) => ({ metricsOpen: open ?? !s.metricsOpen })),
+  toggleOverlapsView: (open) => set((s) => ({ overlapsView: open ?? !s.overlapsView })),
   toggleSound: (on) => set((s) => ({ soundOn: on ?? !s.soundOn })),
   moveStage: (companyId, stage) =>
     set((s) => ({ stageOverrides: { ...s.stageOverrides, [companyId]: stage } })),

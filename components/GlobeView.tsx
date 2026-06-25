@@ -157,25 +157,6 @@ export default function GlobeView() {
   const tipAlt = (d: any) => (beamLevel ? 0.05 + 0.5 * ((d?.value || 0) / maxValue) : 0.012);
   const beamColor = (d: any) => repColor(d?.kind === "company" ? d?.company?.ownerRep : d?.rep);
 
-  // --- HTML overlays: overlap badges + selected name label ---
-  const htmlData = useMemo(() => {
-    if (isAggregate) return [] as any[];
-    const inCity = visible.filter((c) => c.country === selectedCountry && c.city === selectedCity);
-    const byName = new Map<string, { name: string; lat: number; lng: number; reps: string[] }>();
-    for (const c of inCity) {
-      if (!overlaps.has(norm(c.name))) continue;
-      const e = byName.get(norm(c.name)) ?? { name: c.name, lat: 0, lng: 0, reps: [] };
-      e.lat += c.lat;
-      e.lng += c.lng;
-      if (!e.reps.includes(c.ownerRep)) e.reps.push(c.ownerRep);
-      byName.set(norm(c.name), e);
-    }
-    const badges = [...byName.values()].map((e) => ({ type: "overlap" as const, lat: e.lat / 2, lng: e.lng / 2, reps: e.reps }));
-    const sel = inCity.find((c) => c.id === selectedCompanyId);
-    const label = sel ? [{ type: "label" as const, lat: sel.lat, lng: sel.lng, text: sel.name }] : [];
-    return [...badges, ...label];
-  }, [isAggregate, visible, selectedCountry, selectedCity, selectedCompanyId, overlaps]);
-
   // --- Camera flights ---
   useEffect(() => {
     const g = globeRef.current;
@@ -346,12 +327,6 @@ export default function GlobeView() {
         ringMaxRadius={(d: any) => (d.__overlap ? 2.6 : isAggregate ? 3 : 1.4)}
         ringPropagationSpeed={1.6}
         ringRepeatPeriod={(d: any) => (d.__overlap ? 1100 : 1600)}
-        // --- HTML overlays ---
-        htmlElementsData={htmlData}
-        htmlLat={(d: any) => d.lat}
-        htmlLng={(d: any) => d.lng}
-        htmlAltitude={(d: any) => (d.type === "label" ? 0.24 : 0.16)}
-        htmlElement={(d: any) => makeHtml(d)}
       />
 
       {drill === "globe" && hoverPoly && (
@@ -377,28 +352,6 @@ function ringData(points: any[]) {
   // A halo ring on every beam/dot, plus an extra amber pulse for overlaps.
   const overlaps = points.filter((p) => p.overlap).map((p) => ({ ...p, __overlap: true }));
   return [...points, ...overlaps] as object[];
-}
-
-function makeHtml(d: any): HTMLElement {
-  if (d.type === "label") {
-    const el = document.createElement("div");
-    el.style.cssText =
-      "transform:translate(-50%,-160%);font-family:Inter,sans-serif;font-size:12px;font-weight:600;color:#fff;background:rgba(15,17,23,0.85);border:1px solid rgba(255,255,255,0.12);padding:3px 8px;border-radius:8px;white-space:nowrap;backdrop-filter:blur(6px);box-shadow:0 6px 24px rgba(0,0,0,0.5)";
-    el.textContent = d.text;
-    return el;
-  }
-  const el = document.createElement("div");
-  el.style.cssText =
-    "transform:translate(-50%,-50%);display:flex;align-items:center;gap:5px;font-family:Inter,sans-serif;font-size:11px;font-weight:700;color:#0b0d12;background:" +
-    OVERLAP_COLOR +
-    ";padding:3px 7px;border-radius:999px;white-space:nowrap;box-shadow:0 0 16px -2px " +
-    OVERLAP_COLOR +
-    ";animation:pulseGlow 2s ease-in-out infinite";
-  const dots = (d.reps as string[])
-    .map((r) => `<span style="width:8px;height:8px;border-radius:999px;display:inline-block;background:${repColor(r)};box-shadow:0 0 4px ${repColor(r)}"></span>`)
-    .join("");
-  el.innerHTML = `<span style="display:flex;gap:3px">${dots}</span><span>${d.reps.length} reps</span>`;
-  return el;
 }
 
 function box(title: string, lines: string[]) {
